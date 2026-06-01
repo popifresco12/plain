@@ -1,0 +1,30 @@
+# Build
+app/build/
+app/.cxx/
+build/
+.gradle/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+backend/venv/
+backend/__pycache__/
+*.pyc
+backend/plain.db
+
+# Android
+*.apk
+*.aab
+*.hprof
+
+# Env
+.env
+*.env.local
