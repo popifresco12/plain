@@ -23,6 +23,9 @@ backend/plain.db
 # Android
 *.apk
 *.aab
+
+# Keystore (keep local, don't push)
+plain-release-key.jks
 *.hprof
 
 # Env

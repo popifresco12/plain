@@ -33,6 +33,7 @@ data class PlanResponse(
     val category: String,
     val city: String,
     val emoji: String,
+    val tags: List<String> = emptyList(),
     @SerializedName("is_default") val isDefault: Boolean
 )
 
@@ -46,6 +47,45 @@ data class PlanCreateRequest(
     val category: String,
     val city: String,
     val emoji: String
+)
+
+// === Favorites ===
+
+data class FavoritePlan(
+    val id: Int,
+    val title: String,
+    val description: String,
+    val location: String,
+    val price: String,
+    @SerializedName("plan_type") val planType: String,
+    val duration: String,
+    val category: String,
+    val city: String,
+    val emoji: String,
+    val tags: List<String> = emptyList(),
+    @SerializedName("is_default") val isDefault: Boolean
+)
+
+data class FavoriteResponse(
+    val id: Int,
+    @SerializedName("plan_id") val planId: Int,
+    @SerializedName("created_at") val createdAt: String,
+    val plan: FavoritePlan
+)
+
+data class FavoriteActionResponse(
+    val status: String
+)
+
+// === Disliked Tags ===
+
+data class DislikeTagsRequest(
+    val tags: List<String>
+)
+
+data class DislikeTagsResponse(
+    val status: String,
+    val tags: List<String>
 )
 
 // === Webhook ===

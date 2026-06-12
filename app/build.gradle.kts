@@ -19,10 +19,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../plain-release-key.jks")
+            storePassword = "PlainRelease1"
+            keyAlias = "plain"
+            keyPassword = "PlainRelease1"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

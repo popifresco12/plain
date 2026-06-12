@@ -26,6 +26,20 @@ interface ApiService {
     @POST("api/plans")
     suspend fun createPlan(@Body body: PlanCreateRequest): Response<PlanResponse>
 
+    // Favorites
+    @GET("api/favorites")
+    suspend fun getFavorites(): Response<List<FavoriteResponse>>
+
+    @POST("api/favorites/{planId}")
+    suspend fun addFavorite(@Path("planId") planId: Int): Response<FavoriteActionResponse>
+
+    @DELETE("api/favorites/{planId}")
+    suspend fun removeFavorite(@Path("planId") planId: Int): Response<FavoriteActionResponse>
+
+    // Disliked Tags
+    @POST("api/dislike-tags")
+    suspend fun dislikeTags(@Body body: DislikeTagsRequest): Response<DislikeTagsResponse>
+
     // Webhook
     @GET("api/webhook")
     suspend fun getWebhook(): Response<WebhookResponse>

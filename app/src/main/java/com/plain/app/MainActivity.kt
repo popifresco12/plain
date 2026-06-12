@@ -13,6 +13,7 @@ import com.plain.app.data.auth.BiometricAuthHelper
 import com.plain.app.ui.screens.BiometricSettingsScreen
 import com.plain.app.ui.screens.BiometricUnlockScreen
 import com.plain.app.ui.screens.CitySelectionScreen
+import com.plain.app.ui.screens.FavoritesScreen
 import com.plain.app.ui.screens.LoginScreen
 import com.plain.app.ui.screens.RegisterScreen
 import com.plain.app.ui.screens.SettingsScreen
@@ -91,7 +92,14 @@ fun PLAINApp(activity: MainActivity, isLoggedIn: Boolean) {
             SwipeScreen(
                 city = cityName,
                 onBack = { navController.popBackStack() },
-                onSettings = { navController.navigate("settings") }
+                onSettings = { navController.navigate("settings") },
+                onFavorites = { navController.navigate("favorites") }
+            )
+        }
+
+        composable("favorites") {
+            FavoritesScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 

@@ -9,9 +9,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +35,8 @@ import kotlinx.coroutines.launch
 fun SwipeScreen(
     city: String,
     onBack: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onFavorites: () -> Unit
 ) {
     var plans by remember { mutableStateOf<List<PlanResponse>>(emptyList()) }
     var currentIndex by remember { mutableIntStateOf(0) }
@@ -45,6 +46,7 @@ fun SwipeScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showInfoDialog by remember { mutableStateOf<PlanResponse?>(null) }
     var webhookAvailable by remember { mutableStateOf(false) }
+    var feedbackText by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     // Load plans from API
@@ -89,6 +91,9 @@ fun SwipeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onFavorites) {
+                        Icon(Icons.Default.Favorite, contentDescription = "Favoritos", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Ajustes")
                     }
@@ -218,13 +223,39 @@ fun SwipeScreen(
 
                         LaunchedEffect(resultOffsetX) {
                             if (isAnimating && kotlin.math.abs(resultOffsetX) >= 1500f) {
-                                if (offsetX > 0 && topCard != null && webhookAvailable) {
+                                val currentPlan = topCard
+
+                                if (offsetX > 0 && currentPlan != null) {
+                                    // SWIPE RIGHT — Save to favorites
                                     scope.launch {
                                         try {
-                                            ApiClient.service.triggerWebhook(topCard.id)
+                                            ApiClient.service.addFavorite(currentPlan.id)
                                         } catch (_: Exception) {}
                                     }
+                                    // Trigger webhook if configured
+                                    if (webhookAvailable) {
+                                        scope.launch {
+                                            try {
+                                                ApiClient.service.triggerWebhook(currentPlan.id)
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                                } else if (offsetX < 0 && currentPlan != null) {
+                                    // SWIPE LEFT — Record disliked tags
+                                    if (currentPlan.tags.isNotEmpty()) {
+                                        scope.launch {
+                                            try {
+                                                val resp = ApiClient.service.dislikeTags(
+                                                    com.plain.app.data.DislikeTagsRequest(currentPlan.tags)
+                                                )
+                                                if (resp.isSuccessful) {
+                                                    feedbackText = "Se mostrarán menos planes similares"
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
                                 }
+
                                 currentIndex++
                                 offsetX = 0f
                                 isAnimating = false
@@ -246,6 +277,8 @@ fun SwipeScreen(
                                     try {
                                         val resp = ApiClient.service.triggerWebhook(plan.id)
                                         if (resp.isSuccessful) {
+                                            // Also save as favorite
+                                            try { ApiClient.service.addFavorite(plan.id) } catch (_: Exception) {}
                                             currentIndex++
                                             offsetX = 0f
                                         }
@@ -271,6 +304,28 @@ fun SwipeScreen(
                                     )
                                 }
                         )
+
+                        // Feedback toast
+                        feedbackText?.let { msg ->
+                            LaunchedEffect(msg) {
+                                kotlinx.coroutines.delay(2500)
+                                feedbackText = null
+                            }
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 16.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                            ) {
+                                Text(
+                                    text = msg,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
 
                         Text(
                             text = "${currentIndex + 1} / ${plans.size}",
@@ -300,6 +355,10 @@ fun SwipeScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text("Para: ${plan.planType.lowercase().replaceFirstChar { it.uppercase() }}", color = MaterialTheme.colorScheme.primary)
+                    if (plan.tags.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Etiquetas: ${plan.tags.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             },
             confirmButton = { TextButton(onClick = { showInfoDialog = null }) { Text("Cerrar") } }
