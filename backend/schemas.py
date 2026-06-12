@@ -1,6 +1,7 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
+import json
 
 
 # === Auth ===
@@ -43,6 +44,7 @@ class PlanCreate(BaseModel):
     category: str = "Ocio"
     city: str
     emoji: str = "📍"
+    tags: list[str] = []
 
 
 class PlanResponse(BaseModel):
@@ -56,11 +58,36 @@ class PlanResponse(BaseModel):
     category: str
     city: str
     emoji: str
+    tags: list[str] = []
     is_default: bool
     created_by: Optional[int] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, str):
+            return json.loads(v) if v else []
+        return v or []
+
+
+# === Favorites ===
+
+class FavoriteResponse(BaseModel):
+    id: int
+    plan_id: int
+    created_at: datetime
+    plan: PlanResponse
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# === Disliked Tags ===
+
+class DislikeTagsRequest(BaseModel):
+    tags: list[str]
 
 
 # === Webhook ===

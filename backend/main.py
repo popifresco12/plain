@@ -14,8 +14,10 @@ from auth import (
     verify_password,
 )
 from database import Base, SessionLocal, engine, get_db
-from models import Plan, User, WebhookConfig
+from models import DislikedTag, Favorite, Plan, User, WebhookConfig
 from schemas import (
+    DislikeTagsRequest,
+    FavoriteResponse,
     PlanCreate,
     PlanResponse,
     TokenResponse,
@@ -45,31 +47,31 @@ app.add_middleware(
 
 SEED_PLANS = [
     # Barcelona
-    {"title": "Subir al Tibidabo al atardecer", "description": "Bus hasta el Parque de Atracciones y subida a pie. Vistas 360° de toda la ciudad al atardecer.", "location": "Tibidabo", "price": "0€", "plan_type": "AMBOS", "duration": "2h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🌅"},
-    {"title": "Tapeo por El Born", "description": "De bar en bar: calles medievales, vinos y tapas. Imprescindible: La Vinya del Senyor.", "location": "El Born", "price": "10-15€", "plan_type": "PAREJA", "duration": "3h", "category": "Gastronomía", "city": "BARCELONA", "emoji": "🥘"},
-    {"title": "Mercat de la Boqueria", "description": "Degustación de jugos, tapas y frutas exóticas. Ideal para ir solo y perderse entre puestos.", "location": "La Rambla", "price": "5-10€", "plan_type": "SOLO", "duration": "1.5h", "category": "Gastronomía", "city": "BARCELONA", "emoji": "🍤"},
-    {"title": "Bunkers del Carmel", "description": "Las mejores vistas de Barcelona gratis. Lleva cerveza y ponte al atardecer.", "location": "Turó de la Rovira", "price": "0€", "plan_type": "AMBOS", "duration": "1.5h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "📸"},
-    {"title": "Ruta graffiti por el Raval", "description": "Arte urbano, murales enormes y galerías callejeras. Recorrido autoguiado.", "location": "El Raval", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "🎨"},
-    {"title": "Picnic en la Ciutadella", "description": "El parque más bonito de la ciudad. Ideal para llevar queso, vino y manta.", "location": "Parc de la Ciutadella", "price": "5€", "plan_type": "PAREJA", "duration": "2h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🧺"},
-    {"title": "Museo Picasso (domingo gratis)", "description": "Entrada gratuita desde las 15h los domingos. Una de las mejores colecciones.", "location": "El Born", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "🖼️"},
-    {"title": "Baño en la Barceloneta + vermut", "description": "Día de playa urbana con baño y luego vermut en un chiringuito.", "location": "Barceloneta", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🏖️"},
-    {"title": "Ruta modernista por el Eixample", "description": "Recorrido gratuito: Casa Batlló, La Pedrera, Sagrada Família desde fuera.", "location": "Eixample", "price": "0€", "plan_type": "SOLO", "duration": "2.5h", "category": "Cultura", "city": "BARCELONA", "emoji": "🏛️"},
-    {"title": "Mercat dels Encants", "description": "Mercadillo de domingo con gangas, antigüedades y objetos únicos.", "location": "Glòries", "price": "0€", "plan_type": "AMBOS", "duration": "2h", "category": "Compras", "city": "BARCELONA", "emoji": "🛍️"},
-    {"title": "Pasear por el Laberinto de Horta", "description": "El jardín laberíntico más antiguo de Barcelona. Entrada 3€.", "location": "Horta", "price": "3€", "plan_type": "PAREJA", "duration": "1.5h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🌳"},
-    {"title": "Ruta gótica + calles escondidas", "description": "Descubre el Barri Gòtic: el Puente del Obispo, la Catedral y plazas secretas.", "location": "Barri Gòtic", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "📷"},
-    {"title": "Montjuïc: jardins + castillo", "description": "Subida a pie o en teleférico, jardines botánicos y vistas al puerto.", "location": "Montjuïc", "price": "0€", "plan_type": "SOLO", "duration": "3h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🏰"},
-    {"title": "Sónar de día", "description": "Entrada de día al Sónar. Música, arte digital y ambiente único.", "location": "Fira Gran Via", "price": "12€", "plan_type": "AMBOS", "duration": "4h", "category": "Música", "city": "BARCELONA", "emoji": "🎧"},
+    {"title": "Subir al Tibidabo al atardecer", "description": "Bus hasta el Parque de Atracciones y subida a pie. Vistas 360° de toda la ciudad al atardecer.", "location": "Tibidabo", "price": "0€", "plan_type": "AMBOS", "duration": "2h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🌅", "tags": ["naturaleza", "gratis", "vistas", "atardecer"]},
+    {"title": "Tapeo por El Born", "description": "De bar en bar: calles medievales, vinos y tapas. Imprescindible: La Vinya del Senyor.", "location": "El Born", "price": "10-15€", "plan_type": "PAREJA", "duration": "3h", "category": "Gastronomía", "city": "BARCELONA", "emoji": "🥘", "tags": ["comida", "romantico", "paseo", "cultura"]},
+    {"title": "Mercat de la Boqueria", "description": "Degustación de jugos, tapas y frutas exóticas. Ideal para ir solo y perderse entre puestos.", "location": "La Rambla", "price": "5-10€", "plan_type": "SOLO", "duration": "1.5h", "category": "Gastronomía", "city": "BARCELONA", "emoji": "🍤", "tags": ["comida", "mercado", "solo"]},
+    {"title": "Bunkers del Carmel", "description": "Las mejores vistas de Barcelona gratis. Lleva cerveza y ponte al atardecer.", "location": "Turó de la Rovira", "price": "0€", "plan_type": "AMBOS", "duration": "1.5h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "📸", "tags": ["vistas", "gratis", "atardecer", "foto"]},
+    {"title": "Ruta graffiti por el Raval", "description": "Arte urbano, murales enormes y galerías callejeras. Recorrido autoguiado.", "location": "El Raval", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "🎨", "tags": ["arte", "gratis", "paseo", "solo"]},
+    {"title": "Picnic en la Ciutadella", "description": "El parque más bonito de la ciudad. Ideal para llevar queso, vino y manta.", "location": "Parc de la Ciutadella", "price": "5€", "plan_type": "PAREJA", "duration": "2h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🧺", "tags": ["naturaleza", "romantico", "picnic", "barato"]},
+    {"title": "Museo Picasso (domingo gratis)", "description": "Entrada gratuita desde las 15h los domingos. Una de las mejores colecciones.", "location": "El Born", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "🖼️", "tags": ["arte", "cultura", "gratis", "museo"]},
+    {"title": "Baño en la Barceloneta + vermut", "description": "Día de playa urbana con baño y luego vermut en un chiringuito.", "location": "Barceloneta", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🏖️", "tags": ["playa", "gratis", "comida", "verano"]},
+    {"title": "Ruta modernista por el Eixample", "description": "Recorrido gratuito: Casa Batlló, La Pedrera, Sagrada Família desde fuera.", "location": "Eixample", "price": "0€", "plan_type": "SOLO", "duration": "2.5h", "category": "Cultura", "city": "BARCELONA", "emoji": "🏛️", "tags": ["arquitectura", "cultura", "gratis", "paseo", "solo"]},
+    {"title": "Mercat dels Encants", "description": "Mercadillo de domingo con gangas, antigüedades y objetos únicos.", "location": "Glòries", "price": "0€", "plan_type": "AMBOS", "duration": "2h", "category": "Compras", "city": "BARCELONA", "emoji": "🛍️", "tags": ["compras", "mercadillo", "gratis"]},
+    {"title": "Pasear por el Laberinto de Horta", "description": "El jardín laberíntico más antiguo de Barcelona. Entrada 3€.", "location": "Horta", "price": "3€", "plan_type": "PAREJA", "duration": "1.5h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🌳", "tags": ["naturaleza", "jardines", "romantico", "barato"]},
+    {"title": "Ruta gótica + calles escondidas", "description": "Descubre el Barri Gòtic: el Puente del Obispo, la Catedral y plazas secretas.", "location": "Barri Gòtic", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "📷", "tags": ["arquitectura", "paseo", "gratis", "foto", "solo"]},
+    {"title": "Montjuïc: jardins + castillo", "description": "Subida a pie o en teleférico, jardines botánicos y vistas al puerto.", "location": "Montjuïc", "price": "0€", "plan_type": "SOLO", "duration": "3h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🏰", "tags": ["naturaleza", "vistas", "gratis", "paseo", "solo"]},
+    {"title": "Sónar de día", "description": "Entrada de día al Sónar. Música, arte digital y ambiente único.", "location": "Fira Gran Via", "price": "12€", "plan_type": "AMBOS", "duration": "4h", "category": "Música", "city": "BARCELONA", "emoji": "🎧", "tags": ["musica", "festival", "arte", "pago"]},
     # Villena
-    {"title": "Castillo de la Atalaya", "description": "Impresionante castillo medieval con vistas a todo el Valle. Visita guiada 3€.", "location": "Castillo", "price": "3€", "plan_type": "AMBOS", "duration": "1.5h", "category": "Cultura", "city": "VILLENA", "emoji": "🏰"},
-    {"title": "Ruta senderismo Sierra de la Villa", "description": "Ruta circular de 6km por la sierra con vistas al castillo y al valle.", "location": "Sierra de la Villa", "price": "0€", "plan_type": "SOLO", "duration": "3h", "category": "Naturaleza", "city": "VILLENA", "emoji": "🥾"},
-    {"title": "Paseo casco antiguo + tapas", "description": "Calles empedradas, plazas con encanto y tapeo de calidad a precios de pueblo.", "location": "Casco antiguo", "price": "10€", "plan_type": "PAREJA", "duration": "2h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🥘"},
-    {"title": "Street Food Market", "description": "Comida internacional, música en directo y artesanía. Entrada gratuita.", "location": "Recinto Ferial", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🍔"},
-    {"title": "Ruta en bici por Las Virtudes", "description": "Ruta fácil en bici hasta el Santuario de Las Virtudes, rodeado de naturaleza.", "location": "Las Virtudes", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Deporte", "city": "VILLENA", "emoji": "🚴"},
-    {"title": "Mercado de diseño", "description": "Puestos de cerámica, ilustración y diseño local.", "location": "Recinto Ferial", "price": "0€", "plan_type": "PAREJA", "duration": "1h", "category": "Compras", "city": "VILLENA", "emoji": "🎨"},
-    {"title": "Día de piscina natural", "description": "Baño en el Pantano de Villena. Lleva nevera y sombrilla.", "location": "Pantano de Villena", "price": "0€", "plan_type": "SOLO", "duration": "Todo el día", "category": "Naturaleza", "city": "VILLENA", "emoji": "🏊"},
-    {"title": "Teatro Chapí", "description": "Obra de teatro o cine de cartelera en el teatro histórico.", "location": "Teatro Chapí", "price": "5-8€", "plan_type": "PAREJA", "duration": "2h", "category": "Cultura", "city": "VILLENA", "emoji": "🎭"},
-    {"title": "Fiestas del Medievo", "description": "Mercado medieval, justas, música y animación callejera.", "location": "Centro histórico", "price": "0€", "plan_type": "AMBOS", "duration": "4h", "category": "Cultura", "city": "VILLENA", "emoji": "⚔️"},
-    {"title": "Cata de vinos local", "description": "Degustación de vinos de la DOP Alicante en bodegas familiares.", "location": "Bodega local", "price": "5-10€", "plan_type": "PAREJA", "duration": "1.5h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🍷"},
+    {"title": "Castillo de la Atalaya", "description": "Impresionante castillo medieval con vistas a todo el Valle. Visita guiada 3€.", "location": "Castillo", "price": "3€", "plan_type": "AMBOS", "duration": "1.5h", "category": "Cultura", "city": "VILLENA", "emoji": "🏰", "tags": ["castillo", "historia", "cultura", "barato"]},
+    {"title": "Ruta senderismo Sierra de la Villa", "description": "Ruta circular de 6km por la sierra con vistas al castillo y al valle.", "location": "Sierra de la Villa", "price": "0€", "plan_type": "SOLO", "duration": "3h", "category": "Naturaleza", "city": "VILLENA", "emoji": "🥾", "tags": ["senderismo", "naturaleza", "gratis", "deporte", "solo"]},
+    {"title": "Paseo casco antiguo + tapas", "description": "Calles empedradas, plazas con encanto y tapeo de calidad a precios de pueblo.", "location": "Casco antiguo", "price": "10€", "plan_type": "PAREJA", "duration": "2h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🥘", "tags": ["comida", "paseo", "romantico", "cultura"]},
+    {"title": "Street Food Market", "description": "Comida internacional, música en directo y artesanía. Entrada gratuita.", "location": "Recinto Ferial", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🍔", "tags": ["comida", "mercado", "gratis", "musica"]},
+    {"title": "Ruta en bici por Las Virtudes", "description": "Ruta fácil en bici hasta el Santuario de Las Virtudes, rodeado de naturaleza.", "location": "Las Virtudes", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Deporte", "city": "VILLENA", "emoji": "🚴", "tags": ["deporte", "naturaleza", "gratis", "bici", "solo"]},
+    {"title": "Mercado de diseño", "description": "Puestos de cerámica, ilustración y diseño local.", "location": "Recinto Ferial", "price": "0€", "plan_type": "PAREJA", "duration": "1h", "category": "Compras", "city": "VILLENA", "emoji": "🎨", "tags": ["compras", "arte", "mercadillo", "gratis"]},
+    {"title": "Día de piscina natural", "description": "Baño en el Pantano de Villena. Lleva nevera y sombrilla.", "location": "Pantano de Villena", "price": "0€", "plan_type": "SOLO", "duration": "Todo el día", "category": "Naturaleza", "city": "VILLENA", "emoji": "🏊", "tags": ["naturaleza", "gratis", "verano", "baño", "solo"]},
+    {"title": "Teatro Chapí", "description": "Obra de teatro o cine de cartelera en el teatro histórico.", "location": "Teatro Chapí", "price": "5-8€", "plan_type": "PAREJA", "duration": "2h", "category": "Cultura", "city": "VILLENA", "emoji": "🎭", "tags": ["teatro", "cultura", "romantico", "barato"]},
+    {"title": "Fiestas del Medievo", "description": "Mercado medieval, justas, música y animación callejera.", "location": "Centro histórico", "price": "0€", "plan_type": "AMBOS", "duration": "4h", "category": "Cultura", "city": "VILLENA", "emoji": "⚔️", "tags": ["fiestas", "cultura", "gratis", "historia"]},
+    {"title": "Cata de vinos local", "description": "Degustación de vinos de la DOP Alicante en bodegas familiares.", "location": "Bodega local", "price": "5-10€", "plan_type": "PAREJA", "duration": "1.5h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🍷", "tags": ["comida", "vino", "romantico", "barato"]},
 ]
 
 
@@ -80,10 +82,11 @@ def seed_plans():
         count = db.query(Plan).filter(Plan.is_default == True).count()
         if count == 0:
             for p in SEED_PLANS:
-                plan = Plan(**p, is_default=True)
+                tags = p.pop("tags", [])
+                plan = Plan(**p, tags=json.dumps(tags), is_default=True)
                 db.add(plan)
             db.commit()
-            print(f"✅ Seeded {len(SEED_PLANS)} default plans")
+            print(f"✅ Seeded {len(SEED_PLANS)} default plans with tags")
         else:
             print(f"📦 {count} default plans already in DB")
     finally:
@@ -103,12 +106,10 @@ def root():
 
 @app.post("/api/register", response_model=TokenResponse)
 def register(data: UserRegister, db: Session = Depends(get_db)):
-    # Check existing
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(status_code=400, detail="Usuario ya existe")
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email ya registrado")
-
     user = User(
         username=data.username,
         email=data.email,
@@ -117,7 +118,6 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-
     return TokenResponse(
         access_token=create_access_token(user.id),
         user=UserResponse.model_validate(user),
@@ -129,7 +129,6 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
-
     return TokenResponse(
         access_token=create_access_token(user.id),
         user=UserResponse.model_validate(user),
@@ -152,6 +151,7 @@ def list_plans(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """List plans, sorted so plans with user's disliked tags appear last."""
     query = db.query(Plan)
     if city:
         query = query.filter(Plan.city == city.upper())
@@ -159,7 +159,25 @@ def list_plans(
         query = query.filter(Plan.plan_type == plan_type.upper())
     if category:
         query = query.filter(Plan.category == category)
-    return query.order_by(Plan.id).all()
+
+    plans = query.all()
+
+    # Get the user's disliked tags for deprioritization
+    disliked: list[DislikedTag] = db.query(DislikedTag).filter(
+        DislikedTag.user_id == user.id,
+        DislikedTag.count > 0,
+    ).all()
+    disliked_tag_set = {dt.tag for dt in disliked}
+
+    if disliked_tag_set:
+        # Sort: plans with fewer disliked tags come first
+        def plan_score(p: Plan) -> int:
+            p_tags = p.get_tags()
+            return sum(1 for t in p_tags if t in disliked_tag_set)
+
+        plans.sort(key=plan_score)
+
+    return plans
 
 
 @app.post("/api/plans", response_model=PlanResponse)
@@ -169,13 +187,94 @@ def create_plan(
     user: User = Depends(get_current_user),
 ):
     plan = Plan(
-        **data.model_dump(),
+        **data.model_dump(exclude={"tags"}),
+        tags=json.dumps(data.tags),
         created_by=user.id,
     )
     db.add(plan)
     db.commit()
     db.refresh(plan)
     return plan
+
+
+# --- Favorites ---
+
+
+@app.get("/api/favorites", response_model=list[FavoriteResponse])
+def list_favorites(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    favorites = (
+        db.query(Favorite)
+        .filter(Favorite.user_id == user.id)
+        .order_by(Favorite.created_at.desc())
+        .all()
+    )
+    return favorites
+
+
+@app.post("/api/favorites/{plan_id}")
+def add_favorite(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+
+    existing = db.query(Favorite).filter(
+        Favorite.user_id == user.id,
+        Favorite.plan_id == plan_id,
+    ).first()
+    if existing:
+        return {"status": "already_favorited"}
+
+    fav = Favorite(user_id=user.id, plan_id=plan_id)
+    db.add(fav)
+    db.commit()
+    return {"status": "favorited"}
+
+
+@app.delete("/api/favorites/{plan_id}")
+def remove_favorite(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    fav = db.query(Favorite).filter(
+        Favorite.user_id == user.id,
+        Favorite.plan_id == plan_id,
+    ).first()
+    if not fav:
+        raise HTTPException(status_code=404, detail="Favorito no encontrado")
+    db.delete(fav)
+    db.commit()
+    return {"status": "removed"}
+
+
+# --- Disliked Tags ---
+
+
+@app.post("/api/dislike-tags")
+def dislike_tags(
+    data: DislikeTagsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Record that the user dislikes these tags. Increments count for each."""
+    for tag in data.tags:
+        existing = db.query(DislikedTag).filter(
+            DislikedTag.user_id == user.id,
+            DislikedTag.tag == tag,
+        ).first()
+        if existing:
+            existing.count += 1
+        else:
+            db.add(DislikedTag(user_id=user.id, tag=tag, count=1))
+    db.commit()
+    return {"status": "updated", "tags": data.tags}
 
 
 # --- Webhook ---
@@ -238,6 +337,7 @@ def trigger_webhook(
             "city": plan.city,
             "duration": plan.duration,
             "emoji": plan.emoji,
+            "tags": plan.get_tags(),
         },
     }
 
@@ -262,6 +362,11 @@ def trigger_webhook(
 
 if __name__ == "__main__":
     import uvicorn
+
+    # SECRET_KEY check (#9)
+    if not os.environ.get("PLAIN_SECRET_KEY"):
+        print("⚠️  WARNING: PLAIN_SECRET_KEY no está configurada. Usando clave temporal para desarrollo.")
+        print("   Para producción: export PLAIN_SECRET_KEY=$(python3 -c 'import os; print(os.urandom(32).hex())')")
 
     seed_plans()
     uvicorn.run(app, host="0.0.0.0", port=8000)
