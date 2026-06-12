@@ -8,6 +8,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.plain.app.data.AuthManager
+import com.plain.app.data.auth.BiometricAuthHelper
+import com.plain.app.ui.screens.BiometricSettingsScreen
+import com.plain.app.ui.screens.BiometricUnlockScreen
 import com.plain.app.ui.screens.CitySelectionScreen
 import com.plain.app.ui.screens.LoginScreen
 import com.plain.app.ui.screens.RegisterScreen
@@ -26,15 +29,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PLAINTheme {
-                PLAINApp(isLoggedIn = savedToken != null)
+                PLAINApp(this, isLoggedIn = savedToken != null)
             }
         }
     }
 }
 
 @Composable
-fun PLAINApp(isLoggedIn: Boolean) {
+fun PLAINApp(activity: MainActivity, isLoggedIn: Boolean) {
     val navController = rememberNavController()
+    val biometricHelper = remember { BiometricAuthHelper(activity) }
     val startDestination = if (isLoggedIn) "city_selection" else "login"
 
     NavHost(navController = navController, startDestination = startDestination) {
@@ -88,7 +92,24 @@ fun PLAINApp(isLoggedIn: Boolean) {
                     navController.navigate("login") {
                         popUpTo(0) { inclusive = true }
                     }
-                }
+                },
+                onBiometricSettings = { navController.navigate("biometric_settings") }
+            )
+        }
+
+        composable("biometric_settings") {
+            BiometricSettingsScreen(
+                biometricHelper = biometricHelper,
+                onBack = { navController.popBackStack() },
+                onTestBiometric = { navController.navigate("biometric_unlock") }
+            )
+        }
+
+        composable("biometric_unlock") {
+            BiometricUnlockScreen(
+                biometricHelper = biometricHelper,
+                onAuthenticated = { navController.popBackStack() },
+                onCancel = { navController.popBackStack() }
             )
         }
     }
