@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.plain.app.data.ApiClient
 import com.plain.app.data.AuthManager
 import com.plain.app.data.auth.BiometricAuthHelper
 import com.plain.app.ui.screens.BiometricSettingsScreen
@@ -40,6 +41,15 @@ fun PLAINApp(activity: MainActivity, isLoggedIn: Boolean) {
     val navController = rememberNavController()
     val biometricHelper = remember { BiometricAuthHelper(activity) }
     val startDestination = if (isLoggedIn) "city_selection" else "login"
+
+    // Listen for session expiration (token expired / 401)
+    LaunchedEffect(Unit) {
+        ApiClient.sessionExpired.collect {
+            navController.navigate("login") {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable("login") {

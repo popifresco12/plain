@@ -1,5 +1,7 @@
 package com.plain.app.data
 
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -15,6 +17,10 @@ object ApiClient {
 
     private var authToken: String? = null
 
+    // Flow that emits when a 401 is received — the UI observes this to redirect to login
+    private val _sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val sessionExpired: SharedFlow<Unit> = _sessionExpired
+
     fun setToken(token: String?) {
         authToken = token
     }
@@ -26,7 +32,18 @@ object ApiClient {
         authToken?.let {
             request.addHeader("Authorization", "Bearer $it")
         }
-        chain.proceed(request.build())
+        val response = chain.proceed(request.build())
+
+        // On 401: clear token and notify so the UI can redirect to login
+        // Skip login/register to avoid infinite redirect on auth failures
+        val path = chain.request().url.encodedPath
+        if (response.code == 401 && !path.contains("api/login") && !path.contains("api/register")) {
+            authToken = null
+            AuthManager.clearToken()
+            _sessionExpired.tryEmit(Unit)
+        }
+
+        response
     }
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
