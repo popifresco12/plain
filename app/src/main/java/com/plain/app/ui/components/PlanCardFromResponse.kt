@@ -1,10 +1,15 @@
 package com.plain.app.ui.components
 
+import android.content.Context
+import android.content.Intent
+import android.provider.CalendarContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,9 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.plain.app.data.FavoritePlan
 import com.plain.app.data.PlanResponse
 import com.plain.app.ui.theme.LikeGreen
 import com.plain.app.ui.theme.NopeRed
@@ -30,6 +37,7 @@ fun PlanCardFromResponse(
     webhookAvailable: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val rotation = offsetX * 0.08f
     val scale = 1f - (kotlin.math.abs(offsetX) / 2000f).coerceAtMost(0.15f)
 
@@ -129,17 +137,49 @@ fun PlanCardFromResponse(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
 
-                // Actions row
+                // Action buttons row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TextButton(onClick = { onMoreInfo(plan) }) {
-                        Text("Ver más ▶", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    // Calendar button
+                    FilledTonalButton(
+                        onClick = { addToCalendar(context, plan) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                    ) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Calendario", style = MaterialTheme.typography.labelSmall)
                     }
 
+                    // Share (WhatsApp / any app)
+                    FilledTonalButton(
+                        onClick = { sharePlan(context, plan) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Compartir", style = MaterialTheme.typography.labelSmall)
+                    }
+
+                    // "Ver más"
+                    TextButton(onClick = { onMoreInfo(plan) }) {
+                        Text("▶", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    }
+
+                    // Send to agent
                     if (webhookAvailable) {
                         FilledTonalButton(
                             onClick = { onSendToAgent(plan) },
@@ -149,12 +189,93 @@ fun PlanCardFromResponse(
                             )
                         ) {
                             Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Enviar a mi agente", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// ── Helper functions ──
+
+fun addToCalendar(context: Context, plan: PlanResponse) {
+    addToCalendar(context, plan.emoji, plan.title, plan.description, plan.location, plan.price, plan.duration, plan.tags)
+}
+
+fun addToCalendar(context: Context, plan: FavoritePlan) {
+    addToCalendar(context, plan.emoji, plan.title, plan.description, plan.location, plan.price, plan.duration, plan.tags)
+}
+
+private fun addToCalendar(context: Context, emoji: String, title: String, description: String, location: String, price: String, duration: String, tags: List<String>) {
+    val fullTitle = "$emoji $title"
+    val desc = buildString {
+        appendLine(description)
+        appendLine()
+        append("📍 $location")
+        if (price != "0€") append(" · 💰 $price")
+        appendLine()
+        if (tags.isNotEmpty()) append("🏷️ ${tags.joinToString(", ")}")
+        appendLine()
+        appendLine("— vía PLΛIN")
+    }
+
+    val intent = Intent(Intent.ACTION_INSERT).apply {
+        data = CalendarContract.Events.CONTENT_URI
+        putExtra(CalendarContract.Events.TITLE, fullTitle)
+        putExtra(CalendarContract.Events.DESCRIPTION, desc)
+        putExtra(CalendarContract.Events.EVENT_LOCATION, location)
+        // Default: 2 hours from now
+        putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, System.currentTimeMillis() + 3600_000)
+        putExtra(CalendarContract.EXTRA_EVENT_END_TIME, System.currentTimeMillis() + 3600_000 + parseDurationMillis(duration))
+    }
+
+    if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
+    }
+}
+
+fun sharePlan(context: Context, plan: PlanResponse) {
+    sharePlan(context, plan.emoji, plan.title, plan.location, plan.price, plan.description)
+}
+
+fun sharePlan(context: Context, plan: FavoritePlan) {
+    sharePlan(context, plan.emoji, plan.title, plan.location, plan.price, plan.description)
+}
+
+private fun sharePlan(context: Context, emoji: String, title: String, location: String, price: String, description: String) {
+    val text = buildString {
+        appendLine("$emoji $title")
+        appendLine("📍 $location")
+        append("💰 $price")
+        appendLine()
+        appendLine()
+        append(description)
+        appendLine()
+        appendLine()
+        append("— vía PLΛIN")
+    }
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(intent, "Compartir plan"))
+}
+
+/** Parse duration strings like "2h", "1.5h", "30min", "Todo el día" into milliseconds. */
+fun parseDurationMillis(duration: String): Long {
+    val trimmed = duration.trim().lowercase()
+    return when {
+        trimmed.contains("todo el día") || trimmed.contains("dia") -> 8 * 3600_000L
+        trimmed.contains("h") -> {
+            val num = trimmed.replace("h", "").trim().toFloatOrNull() ?: 2f
+            (num * 3600_000).toLong()
+        }
+        trimmed.contains("min") -> {
+            val num = trimmed.replace("min", "").trim().toFloatOrNull() ?: 30f
+            (num * 60_000).toLong()
+        }
+        else -> 2 * 3600_000L // default 2 hours
     }
 }
