@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PLΛIN — Panel Empresa</title>
+<style>
+  :root {
+    --primary: #2D6A4F;
+    --primary-light: #D8F3DC;
+    --gold: #E9C46A;
+    --bg: #F8F9FA;
+    --card: #FFFFFF;
+    --text: #1C1C1C;
+    --muted: #6C757D;
+    --danger: #E63946;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+  .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+  
+  /* Header */
+  .header { text-align: center; padding: 40px 0 20px; }
+  .header h1 { font-size: 2.5rem; color: var(--primary); letter-spacing: 4px; font-weight: 800; }
+  .header p { color: var(--muted); margin-top: 4px; }
+  
+  /* Auth */
+  .auth-box { max-width: 400px; margin: 40px auto; background: var(--card); padding: 32px; border-radius: var(--radius); box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .auth-box h2 { margin-bottom: 20px; color: var(--primary); }
+  .tab-bar { display: flex; margin-bottom: 24px; border-bottom: 2px solid #eee; }
+  .tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .hidden { display: none !important; }
+  
+  input, select, textarea { width: 100%; padding: 12px 16px; border: 1.5px solid #ddd; border-radius: var(--radius); font-size: 14px; margin-bottom: 12px; outline: none; transition: border-color 0.2s; }
+  input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+  textarea { resize: vertical; min-height: 80px; }
+  label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px; color: var(--muted); }
+  
+  .btn { padding: 12px 24px; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: var(--primary); color: white; width: 100%; }
+  .btn-primary:hover { background: #1B4332; }
+  .btn-sm { padding: 8px 16px; font-size: 13px; width: auto; }
+  .btn-outline { background: transparent; border: 1.5px solid var(--primary); color: var(--primary); }
+  .btn-outline:hover { background: var(--primary-light); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-danger:hover { background: #c1121f; }
+  .btn-group { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  
+  .error { color: var(--danger); font-size: 13px; margin: 8px 0; }
+  .success { color: var(--primary); font-size: 13px; margin: 8px 0; }
+  
+  /* Dashboard */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--card); padding: 20px; border-radius: var(--radius); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .stat-card .num { font-size: 28px; font-weight: 800; color: var(--primary); }
+  .stat-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+  .stat-card .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  
+  .section { background: var(--card); padding: 24px; border-radius: var(--radius); box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
+  .section h3 { margin-bottom: 16px; color: var(--text); }
+  
+  .plan-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; border: 1px solid #eee; border-radius: var(--radius); margin-bottom: 8px; }
+  .plan-item .info { flex: 1; }
+  .plan-item .title { font-weight: 600; }
+  .plan-item .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-active { background: #D8F3DC; color: var(--primary); }
+  .badge-exhausted { background: #FEE2E2; color: var(--danger); }
+  
+  .progress-bar { height: 6px; background: #eee; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
+  
+  .row { display: flex; gap: 12px; }
+  .row > * { flex: 1; }
+  
+  @media (max-width: 600px) { .row { flex-direction: column; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>PLΛIN</h1>
+    <p>Panel de empresas — crea planes patrocinados</p>
+  </div>
+
+  <!-- Auth -->
+  <div id="auth-view">
+    <div class="auth-box">
+      <div class="tab-bar">
+        <div class="tab active" onclick="switchTab('login')">Iniciar sesión</div>
+        <div class="tab" onclick="switchTab('register')">Registrarse</div>
+      </div>
+      
+      <div id="login-form">
+        <h2>Entrar</h2>
+        <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+        <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password">
+        <div id="login-error" class="error"></div>
+        <button class="btn btn-primary" onclick="login()">Entrar</button>
+      </div>
+      
+      <div id="register-form" class="hidden">
+        <h2>Registrar empresa</h2>
+        <input type="text" id="reg-name" placeholder="Nombre de la empresa">
+        <input type="email" id="reg-email" placeholder="Email">
+        <input type="password" id="reg-pass" placeholder="Contraseña">
+        <div id="reg-error" class="error"></div>
+        <button class="btn btn-primary" onclick="register()">Crear cuenta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard-view" class="hidden">
+    <div style="text-align:right; margin-bottom: 16px;">
+      <span id="user-display" style="font-weight:600;color:var(--primary);margin-right:12px;"></span>
+      <button class="btn btn-sm btn-outline" onclick="logout()">Cerrar sesión</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="num" id="stat-balance">0</div>
+        <div class="label">Saldo €</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="stat-likes">0</div>
+        <div class="label">Likes totales</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="stat-plans">0</div>
+        <div class="label">Planes activos</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="stat-spent">0€</div>
+        <div class="label">Gastado</div>
+      </div>
+    </div>
+
+    <!-- Top-up -->
+    <div class="section">
+      <h3>💰 Recargar saldo</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+        Añade saldo a tu cuenta. (Simulación — Stripe próximamente)
+      </p>
+      <div class="row">
+        <input type="number" id="topup-amount" placeholder="Cantidad en céntimos (ej: 1000 = 10€)" value="1000" min="1">
+        <button class="btn btn-primary btn-sm" onclick="topUp()" style="flex:0 0 auto;width:auto;padding:12px 24px;">Recargar</button>
+      </div>
+    </div>
+
+    <!-- Create plan -->
+    <div class="section">
+      <h3>➕ Nuevo plan patrocinado</h3>
+      <div class="row">
+        <input type="text" id="plan-title" placeholder="Título del plan">
+        <input type="text" id="plan-emoji" placeholder="Emoji (ej: 🍕)" value="📍">
+      </div>
+      <textarea id="plan-desc" placeholder="Descripción del plan..."></textarea>
+      <div class="row">
+        <input type="text" id="plan-location" placeholder="Ubicación">
+        <input type="text" id="plan-price" placeholder="Precio (ej: 10-15€)" value="0€">
+      </div>
+      <div class="row">
+        <select id="plan-city"><option value="BARCELONA">Barcelona</option><option value="VILLENA">Villena</option></select>
+        <select id="plan-type"><option value="AMBOS">Ambos</option><option value="SOLO">Solo</option><option value="PAREJA">Pareja</option></select>
+        <input type="text" id="plan-duration" placeholder="Duración (ej: 2h)" value="2h">
+      </div>
+      <div class="row">
+        <input type="text" id="plan-category" placeholder="Categoría" value="Ocio">
+        <input type="text" id="plan-tags" placeholder="Tags (coma separada)" value="comida">
+      </div>
+      <div class="row">
+        <div>
+          <label>Presupuesto total (céntimos)</label>
+          <input type="number" id="plan-budget" value="500" min="1">
+        </div>
+        <div>
+          <label>Coste por like (céntimos)</label>
+          <input type="number" id="plan-cpl" value="10" min="1">
+        </div>
+      </div>
+      <div id="plan-error" class="error"></div>
+      <button class="btn btn-primary" onclick="createPlan()" style="margin-top:8px;">Crear plan patrocinado</button>
+    </div>
+
+    <!-- Plan list -->
+    <div class="section">
+      <h3>📋 Mis planes</h3>
+      <div id="plan-list">
+        <p style="color:var(--muted);font-size:14px;">Cargando...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let token = localStorage.getItem('plain_biz_token');
+
+function api(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return fetch(`${API}${path}`, { ...options, headers }).then(r => r.json());
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+  document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+  event.target.classList.add('active');
+}
+
+function login() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-pass').value;
+  document.getElementById('login-error').textContent = '';
+  api('/api/business/login', { method: 'POST', body: JSON.stringify({ email, password }) }).then(data => {
+    if (data.access_token) {
+      token = data.access_token;
+      localStorage.setItem('plain_biz_token', token);
+      showDashboard(data.business);
+    } else {
+      document.getElementById('login-error').textContent = data.detail || 'Error al iniciar sesión';
+    }
+  }).catch(e => {
+    document.getElementById('login-error').textContent = 'Error de conexión';
+  });
+}
+
+function register() {
+  const companyName = document.getElementById('reg-name').value;
+  const email = document.getElementById('reg-email').value;
+  const password = document.getElementById('reg-pass').value;
+  document.getElementById('reg-error').textContent = '';
+  if (!companyName || !email || !password) {
+    document.getElementById('reg-error').textContent = 'Completa todos los campos';
+    return;
+  }
+  api('/api/business/register', { method: 'POST', body: JSON.stringify({ company_name: companyName, email, password }) }).then(data => {
+    if (data.access_token) {
+      token = data.access_token;
+      localStorage.setItem('plain_biz_token', token);
+      showDashboard(data.business);
+    } else {
+      document.getElementById('reg-error').textContent = data.detail || 'Error al registrarse';
+    }
+  }).catch(e => {
+    document.getElementById('reg-error').textContent = 'Error de conexión';
+  });
+}
+
+function logout() {
+  token = null;
+  localStorage.removeItem('plain_biz_token');
+  document.getElementById('dashboard-view').classList.add('hidden');
+  document.getElementById('auth-view').classList.remove('hidden');
+}
+
+function showDashboard(business) {
+  document.getElementById('auth-view').classList.add('hidden');
+  document.getElementById('dashboard-view').classList.remove('hidden');
+  document.getElementById('user-display').textContent = business.company_name || business.email;
+  loadStats();
+  loadPlans();
+}
+
+function loadStats() {
+  api('/api/business/stats').then(data => {
+    if (data.detail) return;
+    document.getElementById('stat-balance').textContent = (data.balance_cents / 100).toFixed(2) + '€';
+    document.getElementById('stat-likes').textContent = data.total_likes;
+    document.getElementById('stat-plans').textContent = data.active_plans + '/' + data.total_plans;
+    document.getElementById('stat-spent').textContent = (data.total_spent_cents / 100).toFixed(2) + '€';
+  });
+}
+
+function loadPlans() {
+  api('/api/business/plans').then(plans => {
+    const list = document.getElementById('plan-list');
+    if (!plans || plans.length === 0) {
+      list.innerHTML = '<p style="color:var(--muted);font-size:14px;">No has creado planes aún.</p>';
+      return;
+    }
+    list.innerHTML = plans.map(p => {
+      const pct = p.budget_cents > 0 ? Math.round((p.spent_cents / p.budget_cents) * 100) : 0;
+      const badge = p.is_active ? '<span class="badge badge-active">Activo</span>' : '<span class="badge badge-exhausted">Agotado</span>';
+      const remaining = p.is_active ? (p.budget_cents - p.spent_cents) / 100 : 0;
+      return `<div class="plan-item">
+        <div class="info">
+          <div class="title">${p.emoji} ${p.title} ${badge}</div>
+          <div class="meta">
+            Gastado ${(p.spent_cents/100).toFixed(2)}€ / ${(p.budget_cents/100).toFixed(2)}€ ·
+            ${p.likes_remaining} likes restantes ·
+            ${p.city} · ${p.cost_per_like_cents}¢/like
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100)}%"></div></div>
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+
+function topUp() {
+  const amount = parseInt(document.getElementById('topup-amount').value);
+  if (!amount || amount < 1) return;
+  api('/api/business/top-up', { method: 'POST', body: JSON.stringify({ amount_cents: amount }) }).then(data => {
+    if (data.status === 'ok') {
+      loadStats();
+    }
+  });
+}
+
+function createPlan() {
+  document.getElementById('plan-error').textContent = '';
+  const tags = document.getElementById('plan-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const data = {
+    title: document.getElementById('plan-title').value,
+    emoji: document.getElementById('plan-emoji').value || '📍',
+    description: document.getElementById('plan-desc').value,
+    location: document.getElementById('plan-location').value,
+    price: document.getElementById('plan-price').value || '0€',
+    city: document.getElementById('plan-city').value,
+    plan_type: document.getElementById('plan-type').value,
+    duration: document.getElementById('plan-duration').value || '2h',
+    category: document.getElementById('plan-category').value || 'Ocio',
+    tags: tags,
+    budget_cents: parseInt(document.getElementById('plan-budget').value) || 500,
+    cost_per_like_cents: parseInt(document.getElementById('plan-cpl').value) || 10,
+  };
+  
+  if (!data.title || !data.description) {
+    document.getElementById('plan-error').textContent = 'Título y descripción son obligatorios';
+    return;
+  }
+
+  api('/api/business/plans', { method: 'POST', body: JSON.stringify(data) }).then(resp => {
+    if (resp.id) {
+      loadPlans();
+      loadStats();
+      // Clear form
+      document.getElementById('plan-title').value = '';
+      document.getElementById('plan-desc').value = '';
+      document.getElementById('plan-location').value = '';
+      document.getElementById('plan-tags').value = '';
+    } else {
+      document.getElementById('plan-error').textContent = resp.detail || 'Error al crear el plan';
+    }
+  });
+}
+
+// Auto-login if token exists
+if (token) {
+  api('/api/business/me').then(data => {
+    if (data.id) showDashboard(data);
+    else logout();
+  }).catch(() => logout());
+}
+</script>
+</body>
+</html>

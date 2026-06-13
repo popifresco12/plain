@@ -5,21 +5,32 @@ from typing import Optional
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from auth import (
     create_access_token,
+    create_business_access_token,
     get_current_user,
+    get_current_business,
     hash_password,
     verify_password,
 )
 from database import Base, SessionLocal, engine, get_db
-from models import DislikedTag, Favorite, Plan, User, WebhookConfig
+from models import Business, DislikedTag, Favorite, Plan, User, WebhookConfig
 from schemas import (
+    BudgetTopUp,
+    BusinessLogin,
+    BusinessRegister,
+    BusinessResponse,
+    BusinessStats,
+    BusinessTokenResponse,
     DislikeTagsRequest,
     FavoriteResponse,
     PlanCreate,
     PlanResponse,
+    SponsoredPlanCreate,
+    SponsoredPlanResponse,
     TokenResponse,
     UserLogin,
     UserRegister,
@@ -31,9 +42,9 @@ from schemas import (
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="PLAIN API", version="1.0.0")
+app = FastAPI(title="PLAIN API", version="2.0.0")
 
-# CORS for Android app
+# CORS for Android app + web panel
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,6 +52,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static web panel
+web_dir = os.path.join(os.path.dirname(__file__), "web")
+os.makedirs(web_dir, exist_ok=True)
+app.mount("/business", StaticFiles(directory=web_dir, html=True), name="business")
 
 
 # === Seed data ===
@@ -98,10 +114,10 @@ def seed_plans():
 
 @app.get("/")
 def root():
-    return {"app": "PLAIN API", "version": "1.0.0"}
+    return {"app": "PLAIN API", "version": "2.0.0"}
 
 
-# --- Auth ---
+# --- User Auth ---
 
 
 @app.post("/api/register", response_model=TokenResponse)
@@ -140,7 +156,131 @@ def get_me(user: User = Depends(get_current_user)):
     return user
 
 
-# --- Plans ---
+# --- Business Auth ---
+
+
+@app.post("/api/business/register", response_model=BusinessTokenResponse)
+def register_business(data: BusinessRegister, db: Session = Depends(get_db)):
+    if db.query(Business).filter(Business.email == data.email).first():
+        raise HTTPException(status_code=400, detail="Email ya registrado")
+    biz = Business(
+        company_name=data.company_name,
+        email=data.email,
+        password_hash=hash_password(data.password),
+    )
+    db.add(biz)
+    db.commit()
+    db.refresh(biz)
+    return BusinessTokenResponse(
+        access_token=create_business_access_token(biz.id),
+        business=BusinessResponse.model_validate(biz),
+    )
+
+
+@app.post("/api/business/login", response_model=BusinessTokenResponse)
+def login_business(data: BusinessLogin, db: Session = Depends(get_db)):
+    biz = db.query(Business).filter(Business.email == data.email).first()
+    if not biz or not verify_password(data.password, biz.password_hash):
+        raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+    return BusinessTokenResponse(
+        access_token=create_business_access_token(biz.id),
+        business=BusinessResponse.model_validate(biz),
+    )
+
+
+@app.get("/api/business/me", response_model=BusinessResponse)
+def get_business_me(business: Business = Depends(get_current_business)):
+    return business
+
+
+# --- Sponsored Plans (Business) ---
+
+
+@app.post("/api/business/plans", response_model=SponsoredPlanResponse)
+def create_sponsored_plan(
+    data: SponsoredPlanCreate,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    """Create a sponsored plan. Budget is deducted from business balance."""
+    if business.balance_cents < data.budget_cents:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente. Recarga tu cuenta.")
+    plan = Plan(
+        title=data.title,
+        description=data.description,
+        location=data.location,
+        price=data.price,
+        plan_type=data.plan_type,
+        duration=data.duration,
+        category=data.category,
+        city=data.city,
+        emoji=data.emoji,
+        tags=json.dumps(data.tags),
+        business_id=business.id,
+        is_sponsored=True,
+        budget_cents=data.budget_cents,
+        cost_per_like_cents=data.cost_per_like_cents,
+        is_active=True,
+    )
+    # Reserve budget
+    business.balance_cents -= data.budget_cents
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@app.get("/api/business/plans", response_model=list[SponsoredPlanResponse])
+def list_sponsored_plans(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    plans = db.query(Plan).filter(
+        Plan.business_id == business.id
+    ).order_by(Plan.created_at.desc()).all()
+    return plans
+
+
+@app.get("/api/business/stats", response_model=BusinessStats)
+def business_stats(
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    plans = db.query(Plan).filter(Plan.business_id == business.id).all()
+    total_plans = len(plans)
+    active_plans = sum(1 for p in plans if p.is_active)
+    total_budget = sum(p.budget_cents for p in plans)
+    total_spent = sum(p.spent_cents for p in plans)
+    total_likes = db.query(Favorite).filter(
+        Favorite.plan_id.in_([p.id for p in plans])
+    ).count() if plans else 0
+
+    return BusinessStats(
+        total_plans=total_plans,
+        active_plans=active_plans,
+        total_budget_cents=total_budget,
+        total_spent_cents=total_spent,
+        total_likes=total_likes,
+        balance_cents=business.balance_cents,
+    )
+
+
+@app.post("/api/business/top-up")
+def top_up_balance(
+    data: BudgetTopUp,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    """Top up business balance (pre-payment simulation, wire to Stripe later)."""
+    business.balance_cents += data.amount_cents
+    db.commit()
+    return {
+        "status": "ok",
+        "new_balance_cents": business.balance_cents,
+    }
+
+
+# --- Plans (User) ---
 
 
 @app.get("/api/plans", response_model=list[PlanResponse])
@@ -151,8 +291,10 @@ def list_plans(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """List plans, sorted so plans with user's disliked tags appear last."""
-    query = db.query(Plan)
+    """List plans: free + active sponsored, sorted with user's disliked tags last."""
+    query = db.query(Plan).filter(
+        Plan.is_default == True  # Free seed plans
+    )
     if city:
         query = query.filter(Plan.city == city.upper())
     if plan_type:
@@ -160,9 +302,21 @@ def list_plans(
     if category:
         query = query.filter(Plan.category == category)
 
-    plans = query.all()
+    free_plans = query.all()
 
-    # Get the user's disliked tags for deprioritization
+    # Also fetch active sponsored plans for this city
+    sponsored_query = db.query(Plan).filter(
+        Plan.is_sponsored == True,
+        Plan.is_active == True,
+    )
+    if city:
+        sponsored_query = sponsored_query.filter(Plan.city == city.upper())
+    sponsored_plans = sponsored_query.all()
+
+    # Combine: free first, then sponsored (interleaved)
+    all_plans = list(free_plans) + list(sponsored_plans)
+
+    # Deprioritize by disliked tags
     disliked: list[DislikedTag] = db.query(DislikedTag).filter(
         DislikedTag.user_id == user.id,
         DislikedTag.count > 0,
@@ -170,14 +324,12 @@ def list_plans(
     disliked_tag_set = {dt.tag for dt in disliked}
 
     if disliked_tag_set:
-        # Sort: plans with fewer disliked tags come first
         def plan_score(p: Plan) -> int:
             p_tags = p.get_tags()
             return sum(1 for t in p_tags if t in disliked_tag_set)
+        all_plans.sort(key=plan_score)
 
-        plans.sort(key=plan_score)
-
-    return plans
+    return all_plans
 
 
 @app.post("/api/plans", response_model=PlanResponse)
@@ -233,6 +385,13 @@ def add_favorite(
 
     fav = Favorite(user_id=user.id, plan_id=plan_id)
     db.add(fav)
+
+    # If sponsored: deduct cost per like from budget
+    if plan.is_sponsored and plan.is_active:
+        plan.spent_cents = (plan.spent_cents or 0) + plan.cost_per_like_cents
+        if plan.spent_cents >= plan.budget_cents:
+            plan.is_active = False
+
     db.commit()
     return {"status": "favorited"}
 
@@ -263,7 +422,6 @@ def dislike_tags(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Record that the user dislikes these tags. Increments count for each."""
     for tag in data.tags:
         existing = db.query(DislikedTag).filter(
             DislikedTag.user_id == user.id,
@@ -338,6 +496,7 @@ def trigger_webhook(
             "duration": plan.duration,
             "emoji": plan.emoji,
             "tags": plan.get_tags(),
+            "is_sponsored": plan.is_sponsored,
         },
     }
 
@@ -363,10 +522,14 @@ def trigger_webhook(
 if __name__ == "__main__":
     import uvicorn
 
-    # SECRET_KEY check (#9)
     if not os.environ.get("PLAIN_SECRET_KEY"):
         print("⚠️  WARNING: PLAIN_SECRET_KEY no está configurada. Usando clave temporal para desarrollo.")
-        print("   Para producción: export PLAIN_SECRET_KEY=$(python3 -c 'import os; print(os.urandom(32).hex())')")
+        print("   Para producción: export PLAIN_SECRET_KEY=***")
 
     seed_plans()
+
+    # Create web directory placeholder
+    web_dir = os.path.join(os.path.dirname(__file__), "web")
+    os.makedirs(web_dir, exist_ok=True)
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

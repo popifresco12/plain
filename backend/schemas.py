@@ -62,6 +62,12 @@ class PlanResponse(BaseModel):
     is_default: bool
     created_by: Optional[int] = None
     created_at: datetime
+    is_sponsored: bool = False
+    business_id: Optional[int] = None
+    budget_cents: int = 0
+    spent_cents: int = 0
+    cost_per_like_cents: int = 0
+    is_active: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,6 +77,93 @@ class PlanResponse(BaseModel):
         if isinstance(v, str):
             return json.loads(v) if v else []
         return v or []
+
+
+# === Business ===
+
+class BusinessRegister(BaseModel):
+    company_name: str
+    email: str
+    password: str
+
+
+class BusinessLogin(BaseModel):
+    email: str
+    password: str
+
+
+class BusinessResponse(BaseModel):
+    id: int
+    company_name: str
+    email: str
+    balance_cents: int = 0
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BusinessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    business: BusinessResponse
+
+
+class SponsoredPlanCreate(BaseModel):
+    title: str
+    description: str
+    location: str
+    price: str = "0€"
+    plan_type: str = "AMBOS"
+    duration: str = "2h"
+    category: str = "Ocio"
+    city: str
+    emoji: str = "📍"
+    tags: list[str] = []
+    budget_cents: int = 500       # Default 5€ budget
+    cost_per_like_cents: int = 10  # Default 0.10€ per like
+
+
+class SponsoredPlanResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    location: str
+    price: str
+    plan_type: str
+    duration: str
+    category: str
+    city: str
+    emoji: str
+    tags: list[str] = []
+    is_sponsored: bool
+    budget_cents: int
+    spent_cents: int
+    cost_per_like_cents: int
+    is_active: bool
+    likes_remaining: int = 0
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, str):
+            return json.loads(v) if v else []
+        return v or []
+
+
+class BusinessStats(BaseModel):
+    total_plans: int
+    active_plans: int
+    total_budget_cents: int
+    total_spent_cents: int
+    total_likes: int
+    balance_cents: int
+
+
+class BudgetTopUp(BaseModel):
+    amount_cents: int
 
 
 # === Favorites ===

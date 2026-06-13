@@ -22,6 +22,19 @@ class User(Base):
     disliked_tags = relationship("DislikedTag", back_populates="user", cascade="all, delete-orphan")
 
 
+class Business(Base):
+    __tablename__ = "businesses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(100), nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    balance_cents = Column(Integer, default=0)  # Prepaid balance in euro cents
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    sponsored_plans = relationship("Plan", back_populates="business", foreign_keys="Plan.business_id")
+
+
 class Plan(Base):
     __tablename__ = "plans"
 
@@ -35,19 +48,38 @@ class Plan(Base):
     category = Column(String(100), nullable=False, default="Ocio")
     city = Column(String(50), nullable=False)  # BARCELONA, VILLENA
     emoji = Column(String(10), nullable=False, default="📍")
-    tags = Column(Text, nullable=False, default="[]")  # JSON array: ["naturaleza", "gratis"]
+    tags = Column(Text, nullable=False, default="[]")  # JSON array
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_default = Column(Boolean, default=False)  # Seed plans
+
+    # Sponsored fields
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    is_sponsored = Column(Boolean, default=False)
+    budget_cents = Column(Integer, default=0)       # Total budget in cents
+    spent_cents = Column(Integer, default=0)         # Spent so far
+    cost_per_like_cents = Column(Integer, default=0) # Cost per like in cents
+    is_active = Column(Boolean, default=True)        # Active while budget remains
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     creator = relationship("User", back_populates="plans")
+    business = relationship("Business", back_populates="sponsored_plans", foreign_keys=[business_id])
 
     def get_tags(self) -> list[str]:
-        """Parse tags from JSON string."""
         try:
             return json.loads(self.tags) if self.tags else []
         except (json.JSONDecodeError, TypeError):
             return []
+
+    @property
+    def budget_remaining_cents(self) -> int:
+        return max(0, self.budget_cents - self.spent_cents)
+
+    @property
+    def likes_remaining(self) -> int:
+        if self.cost_per_like_cents <= 0:
+            return 0
+        return self.budget_remaining_cents // self.cost_per_like_cents
 
 
 class Favorite(Base):
