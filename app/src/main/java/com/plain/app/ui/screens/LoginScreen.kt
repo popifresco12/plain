@@ -23,7 +23,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
-    onGoToRegister: () -> Unit
+    onGoToRegister: () -> Unit,
+    onGoToBusiness: () -> Unit
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -107,8 +108,7 @@ fun LoginScreen(
                             val resp = ApiClient.service.login(LoginRequest(username, password))
                             if (resp.isSuccessful) {
                                 val token = resp.body()!!
-                                AuthManager.saveToken(token.accessToken)
-                                ApiClient.setToken(token.accessToken)
+                                AuthManager.saveUserToken(token.accessToken)
                                 onLoginSuccess()
                             } else {
                                 error = "Usuario o contraseña incorrectos"
@@ -140,6 +140,16 @@ fun LoginScreen(
                 modifier = Modifier.clickable { onGoToRegister() },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "¿Eres una empresa? Panel Business",
+                modifier = Modifier.clickable { onGoToBusiness() },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
                 textAlign = TextAlign.Center
             )
         }

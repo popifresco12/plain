@@ -23,7 +23,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun RegisterScreen(
     onRegisterSuccess: () -> Unit,
-    onGoToLogin: () -> Unit
+    onGoToLogin: () -> Unit,
+    onGoToBusiness: () -> Unit
 ) {
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -126,8 +127,7 @@ fun RegisterScreen(
                             )
                             if (resp.isSuccessful) {
                                 val token = resp.body()!!
-                                AuthManager.saveToken(token.accessToken)
-                                ApiClient.setToken(token.accessToken)
+                                AuthManager.saveUserToken(token.accessToken)
                                 onRegisterSuccess()
                             } else {
                                 error = "Error: ${resp.code()} - ${resp.message()}"
@@ -159,6 +159,16 @@ fun RegisterScreen(
                 modifier = Modifier.clickable { onGoToLogin() },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "¿Eres una empresa? Panel Business",
+                modifier = Modifier.clickable { onGoToBusiness() },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
                 textAlign = TextAlign.Center
             )
         }

@@ -241,6 +241,27 @@ def list_sponsored_plans(
     return plans
 
 
+@app.delete("/api/business/plans/{plan_id}")
+def delete_sponsored_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_current_business),
+):
+    plan = db.query(Plan).filter(
+        Plan.id == plan_id,
+        Plan.business_id == business.id
+    ).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    # Return remaining budget to business
+    remaining = plan.budget_cents - plan.spent_cents
+    if remaining > 0:
+        business.balance_cents += remaining
+    db.delete(plan)
+    db.commit()
+    return {"status": "deleted", "refunded_cents": remaining}
+
+
 @app.get("/api/business/stats", response_model=BusinessStats)
 def business_stats(
     db: Session = Depends(get_db),
