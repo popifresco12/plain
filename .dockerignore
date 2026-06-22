@@ -1,0 +1,16 @@
+app/
+gradle/
+gradlew
+gradlew.bat
+build.gradle.kts
+settings.gradle.kts
+gradle.properties
+proguard-rules.pro
+.git/
+.gitignore
+*.md
+__pycache__/
+*.pyc
+.env
+plain.db
+.DS_Store
