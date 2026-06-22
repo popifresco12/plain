@@ -201,3 +201,8 @@ data class WebhookTriggerResponse(
     @SerializedName("webhook_url") val webhookUrl: String,
     @SerializedName("response_code") val responseCode: Int
 )
+
+data class DeletePlanResponse(
+    val status: String,
+    @SerializedName("refunded_cents") val refundedCents: Int = 0
+)

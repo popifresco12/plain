@@ -3,7 +3,8 @@ import os
 from typing import Optional
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, status
+import stripe
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -42,7 +43,16 @@ from schemas import (
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="PLAIN API", version="2.0.0")
+app = FastAPI(title="PLAIN API", version="2.1.0")
+
+# Stripe configuration
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+    print("✅ Stripe configured")
+else:
+    print("⚠️  STRIPE_SECRET_KEY not set — Stripe payments disabled")
 
 # CORS for Android app + web panel
 app.add_middleware(
@@ -536,6 +546,87 @@ def trigger_webhook(
             }
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error al llamar al webhook: {str(e)}")
+
+
+# --- Stripe Payments ---
+
+
+@app.post("/api/business/create-checkout-session")
+def create_checkout_session(
+    request: Request,
+    db: Session = Depends(get_db),
+    business: Business = Depends(get_current_business),
+    amount_cents: int = 1000,
+):
+    """Create a Stripe Checkout session for top-up."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=400, detail="Stripe no configurado. Usa /api/business/top-up (simulación)")
+
+    if amount_cents < 100 or amount_cents > 100000:
+        raise HTTPException(status_code=400, detail="Importe entre 1€ y 1.000€")
+
+    try:
+        # Create or reuse Stripe customer
+        customer_id = business.stripe_customer_id
+        if not customer_id:
+            customer = stripe.Customer.create(
+                email=business.email,
+                name=business.company_name,
+                metadata={"business_id": str(business.id)},
+            )
+            customer_id = customer.id
+            business.stripe_customer_id = customer_id
+            db.commit()
+
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "eur",
+                    "product_data": {"name": f"Recarga PLAIN - {amount_cents//100}€"},
+                    "unit_amount": amount_cents,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=str(request.base_url) + "business?payment=success",
+            cancel_url=str(request.base_url) + "business?payment=cancelled",
+            metadata={"business_id": str(business.id)},
+        )
+        return {"url": session.url, "session_id": session.id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error Stripe: {str(e)}")
+
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle Stripe webhook events (checkout.session.completed)."""
+    if not STRIPE_WEBHOOK_SECRET:
+        # Fallback: no verification (dev mode)
+        payload = await request.body()
+        event = json.loads(payload)
+    else:
+        payload = await request.body()
+        sig_header = request.headers.get("stripe-signature")
+        try:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        except stripe.error.SignatureVerificationError:
+            raise HTTPException(status_code=400, detail="Invalid signature")
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        business_id = int(session.get("metadata", {}).get("business_id", 0))
+        amount_cents = session.get("amount_total", 0)
+
+        if business_id and amount_cents > 0:
+            biz = db.query(Business).filter(Business.id == business_id).first()
+            if biz:
+                biz.balance_cents += amount_cents
+                db.commit()
+                print(f"✅ Stripe: {biz.company_name} recargó {amount_cents}¢ (balance: {biz.balance_cents}¢)")
+
+    return {"status": "ok"}
 
 
 # --- Start ---

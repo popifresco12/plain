@@ -306,14 +306,45 @@
     <section class="section">
       <div class="section-header">
         <h3><span class="emoji">💰</span>Recargar Saldo</h3>
-        <span class="badge badge-preview" style="font-size:10px;">Simulación</span>
+        <div>
+          <button class="btn btn-sm btn-outline" onclick="toggleTopUpMode()" id="topup-mode-toggle">💳 Pago real (Stripe)</button>
+          <span class="badge badge-preview" style="font-size:10px;margin-left:8px;" id="topup-mode-badge">Simulación</span>
+        </div>
       </div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Añade saldo a tu cuenta para crear planes patrocinados. (Simulación — Stripe próximamente)</p>
-      <div class="input-row">
-        <input type="number" id="topup-amount" placeholder="Cantidad en céntimos (ej: 1000 = 10€)" value="1000" min="100" max="100000">
-        <button class="btn btn-primary btn-sm" onclick="topUp()" style="flex:0 0 auto;align-self:flex-end;">Recargar</button>
+
+      <!-- Simulation top-up (fallback) -->
+      <div id="topup-simulation">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Añade saldo de prueba a tu cuenta.</p>
+        <div class="input-row">
+          <input type="number" id="topup-amount" placeholder="Cantidad en céntimos (ej: 1000 = 10€)" value="1000" min="100" max="100000">
+          <button class="btn btn-primary btn-sm" onclick="topUp()" style="flex:0 0 auto;align-self:flex-end;">Recargar (simulación)</button>
+        </div>
+        <p class="hint">Mínimo 100¢ (1€) • Máximo 100.000¢ (1.000€) por recarga</p>
       </div>
-      <p class="hint">Mínimo 100¢ (1€) • Máximo 100.000¢ (1.000€) por recarga</p>
+
+      <!-- Stripe top-up -->
+      <div id="topup-stripe" style="display:none;">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Paga con tarjeta vía Stripe. El saldo se añade automáticamente.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:16px;">
+          <button class="btn btn-primary" onclick="stripeCheckout(1000)" style="padding:20px 12px;flex-direction:column;gap:4px;">
+            <span style="font-size:1.5rem;">10€</span>
+            <span style="font-size:11px;opacity:0.8;">+1.000 saldo</span>
+          </button>
+          <button class="btn btn-primary" onclick="stripeCheckout(2500)" style="padding:20px 12px;flex-direction:column;gap:4px;">
+            <span style="font-size:1.5rem;">25€</span>
+            <span style="font-size:11px;opacity:0.8;">+2.500 saldo</span>
+          </button>
+          <button class="btn btn-primary" onclick="stripeCheckout(5000)" style="padding:20px 12px;flex-direction:column;gap:4px;">
+            <span style="font-size:1.5rem;">50€</span>
+            <span style="font-size:11px;opacity:0.8;">+5.000 saldo</span>
+          </button>
+          <button class="btn btn-primary" onclick="stripeCheckout(10000)" style="padding:20px 12px;flex-direction:column;gap:4px;">
+            <span style="font-size:1.5rem;">100€</span>
+            <span style="font-size:11px;opacity:0.8;">+10.000 saldo</span>
+          </button>
+        </div>
+        <p class="hint">💳 Pago seguro por Stripe • Recibes el saldo al instante</p>
+      </div>
     </section>
 
     <!-- Create Plan Section -->
@@ -900,6 +931,53 @@ async function topUp() {
   } catch (e) {
     showToast('Error al recargar: ' + e.message, 'error');
   }
+}
+
+// ── Stripe Payments ──
+
+let topUpMode = 'simulation';
+
+function toggleTopUpMode() {
+  topUpMode = topUpMode === 'simulation' ? 'stripe' : 'simulation';
+  document.getElementById('topup-simulation').style.display = topUpMode === 'simulation' ? 'block' : 'none';
+  document.getElementById('topup-stripe').style.display = topUpMode === 'stripe' ? 'block' : 'none';
+  const toggle = document.getElementById('topup-mode-toggle');
+  const badge = document.getElementById('topup-mode-badge');
+  if (topUpMode === 'stripe') {
+    toggle.textContent = '🧪 Modo simulación';
+    badge.textContent = '💳 Stripe';
+    badge.className = 'badge badge-active';
+  } else {
+    toggle.textContent = '💳 Pago real (Stripe)';
+    badge.textContent = 'Simulación';
+    badge.className = 'badge badge-preview';
+  }
+}
+
+async function stripeCheckout(amountCents) {
+  try {
+    showLoading('Redirigiendo a Stripe...');
+    const data = await api(`/api/business/create-checkout-session?amount_cents=${amountCents}`, { method: 'POST' });
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      showToast('Error al crear sesión de pago', 'error');
+    }
+  } catch (e) {
+    showToast(e.message || 'Error al conectar con Stripe', 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+// Handle return from Stripe
+if (window.location.search.includes('payment=success')) {
+  showToast('✅ Pago completado. Saldo actualizado.', 'success');
+  window.history.replaceState({}, '', window.location.pathname);
+  loadDashboard();
+} else if (window.location.search.includes('payment=cancelled')) {
+  showToast('Pago cancelado', 'warning');
+  window.history.replaceState({}, '', window.location.pathname);
 }
 
 // ── Auto-login ──

@@ -67,6 +67,9 @@ interface ApiService {
     @GET("api/business/plans")
     suspend fun getBusinessPlans(): Response<List<SponsoredPlanResponse>>
 
+    @DELETE("api/business/plans/{planId}")
+    suspend fun deleteSponsoredPlan(@Path("planId") planId: Int): Response<DeletePlanResponse>
+
     // ===== Business Stats =====
     @GET("api/business/stats")
     suspend fun getBusinessStats(): Response<BusinessStats>

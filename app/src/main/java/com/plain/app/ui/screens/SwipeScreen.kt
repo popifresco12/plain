@@ -165,10 +165,67 @@ fun SwipeScreen(
         ) {
             when {
                 loading -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Cargando planes...", style = MaterialTheme.typography.bodyLarge)
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        // Shimmer-like loading cards
+                        repeat(3) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp)
+                                    .height(320.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f + it * 0.1f)
+                                )
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+                                    Column {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(30.dp)
+                                                )
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.7f)
+                                                .height(24.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(4.dp)
+                                                )
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.9f)
+                                                .height(16.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(4.dp)
+                                                )
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.5f)
+                                                .height(16.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(4.dp)
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 error != null -> {

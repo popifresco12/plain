@@ -30,6 +30,7 @@ class Business(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     balance_cents = Column(Integer, default=0)  # Prepaid balance in euro cents
+    stripe_customer_id = Column(String(255), nullable=True)  # Stripe customer ID
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     sponsored_plans = relationship("Plan", back_populates="business", foreign_keys="Plan.business_id")
