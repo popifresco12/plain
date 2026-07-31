@@ -716,6 +716,13 @@ function filterPlans() {
   renderPlanList(filtered);
 }
 
+// ── XSS-safe helpers ──
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 function renderPlanList(plans) {
   const list = document.getElementById('plan-list');
   if (!plans || plans.length === 0) {
@@ -733,19 +740,19 @@ function renderPlanList(plans) {
     return `<div class="plan-item sponsored" data-id="${p.id}">
       <div class="info">
         <div class="title-row">
-          <span class="title">${p.emoji} ${p.title}</span>
+          <span class="title">${escapeHtml(p.emoji)} ${escapeHtml(p.title)}</span>
           ${badge} ${sponsoredBadge}
         </div>
         <div class="meta">
           <span>💰 Gastado ${formatCents(p.spent_cents)} / ${formatCents(p.budget_cents)}</span>
           <span>👍 ${p.likes_remaining || Math.max(0, Math.floor((p.budget_cents - p.spent_cents) / (p.cost_per_like_cents || 1)))} likes restantes</span>
-          <span>📍 ${p.city}</span>
+          <span>📍 ${escapeHtml(p.city)}</span>
           <span>💎 ${p.cost_per_like_cents}¢/like</span>
         </div>
         <div class="progress-bar"><div class="progress-fill ${progressClass}" style="width:${Math.min(pct,100)}%"></div></div>
         <div class="plan-actions">
           <button class="btn btn-sm btn-outline" onclick="previewPlan(${p.id})">👁️ Preview</button>
-          <button class="btn btn-sm btn-danger" onclick="openDeleteModal(${p.id}, '${p.title.replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
+          <button class="btn btn-sm btn-danger" onclick="openDeleteModal(${p.id}, '${escapeHtml(p.title).replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
         </div>
       </div>
     </div>`;
@@ -786,13 +793,13 @@ function previewPlan(planId) {
     <div class="preview-phone">
       <div class="preview-screen">
         <div class="preview-content">
-          <div class="preview-emoji">${plan.emoji}</div>
-          <div class="preview-title">${plan.title}</div>
-          <div class="preview-price">${plan.price}</div>
+          <div class="preview-emoji">${escapeHtml(plan.emoji)}</div>
+          <div class="preview-title">${escapeHtml(plan.title)}</div>
+          <div class="preview-price">${escapeHtml(plan.price)}</div>
           <div class="preview-tags">
-            ${plan.tags.map(t => `<span class="preview-tag">#${t}</span>`).join('')}
+            ${plan.tags.map(t => `<span class="preview-tag">#${escapeHtml(t)}</span>`).join('')}
           </div>
-          <div style="font-size:13px;color:#666;text-align:center;margin-bottom:16px;line-height:1.4;">${plan.description.slice(0,120)}${plan.description.length>120?'…':''}</div>
+          <div style="font-size:13px;color:#666;text-align:center;margin-bottom:16px;line-height:1.4;">${escapeHtml(plan.description.slice(0,120))}${plan.description.length>120?'…':''}</div>
           <div class="preview-swipe-hint">
             <span class="nope"><span>←</span> No</span>
             <span class="like">Me gusta <span>→</span></span>

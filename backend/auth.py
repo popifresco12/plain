@@ -1,7 +1,7 @@
-import hashlib
 import os
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -10,7 +10,13 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Business
 
-SECRET_KEY = os.environ.get("PLAIN_SECRET_KEY", "plain-super-secret-key-change-in-prod")
+SECRET_KEY = os.environ.get("PLAIN_SECRET_KEY", "")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "PLAIN_SECRET_KEY no está definido. Genera uno con: "
+        "python -c \"import secrets; print(secrets.token_urlsafe(48))\" "
+        "y configúralo en el entorno antes de arrancar."
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 
@@ -18,16 +24,14 @@ security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256 with salt prefix."""
-    salt = os.urandom(16).hex()
-    return f"{salt}:{hashlib.sha256((salt + password).encode()).hexdigest()}"
+    """Hash password using bcrypt (KDF resistente a brute-force)."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify a password against its hash."""
+    """Verify a password against its bcrypt hash (constant-time)."""
     try:
-        salt, stored_hash = hashed.split(":", 1)
-        return stored_hash == hashlib.sha256((salt + password).encode()).hexdigest()
+        return bcrypt.checkpw(password.encode(), hashed.encode())
     except (ValueError, AttributeError):
         return False
 

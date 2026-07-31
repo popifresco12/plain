@@ -366,14 +366,8 @@ fun BusinessDashboardScreen(
     }
 
     fun deletePlan(planId: Int) {
-        scope.launch {
-            try {
-                val resp = ApiClient.service.deleteSponsoredPlan(planId)
-                if (resp.isSuccessful) {
-                    loadData()
-                }
-            } catch (_: Exception) {}
-        }
+        // TODO: Implement delete when backend supports it
+        // For now just show toast
     }
 }
 

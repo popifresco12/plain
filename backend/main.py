@@ -1,12 +1,18 @@
+import ipaddress
 import json
 import os
+import socket
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 import stripe
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -45,6 +51,11 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="PLAIN API", version="2.1.0")
 
+# Rate limiting — auth endpoints son bruteforceables
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Stripe configuration
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -54,10 +65,18 @@ if STRIPE_SECRET_KEY:
 else:
     print("⚠️  STRIPE_SECRET_KEY not set — Stripe payments disabled")
 
-# CORS for Android app + web panel
+# CORS for Android app + web panel — orígenes explícitos, nunca "*"
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get(
+        "PLAIN_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173",
+    ).split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -131,7 +150,8 @@ def root():
 
 
 @app.post("/api/register", response_model=TokenResponse)
-def register(data: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def register(request: Request, data: UserRegister, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(status_code=400, detail="Usuario ya existe")
     if db.query(User).filter(User.email == data.email).first():
@@ -151,7 +171,8 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
 
 
 @app.post("/api/login", response_model=TokenResponse)
-def login(data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
@@ -170,7 +191,8 @@ def get_me(user: User = Depends(get_current_user)):
 
 
 @app.post("/api/business/register", response_model=BusinessTokenResponse)
-def register_business(data: BusinessRegister, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def register_business(request: Request, data: BusinessRegister, db: Session = Depends(get_db)):
     if db.query(Business).filter(Business.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email ya registrado")
     biz = Business(
@@ -188,7 +210,8 @@ def register_business(data: BusinessRegister, db: Session = Depends(get_db)):
 
 
 @app.post("/api/business/login", response_model=BusinessTokenResponse)
-def login_business(data: BusinessLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login_business(request: Request, data: BusinessLogin, db: Session = Depends(get_db)):
     biz = db.query(Business).filter(Business.email == data.email).first()
     if not biz or not verify_password(data.password, biz.password_hash):
         raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
@@ -303,6 +326,12 @@ def top_up_balance(
     business: Business = Depends(get_current_business),
 ):
     """Top up business balance (pre-payment simulation, wire to Stripe later)."""
+    # Seguridad: en producción (Stripe configurado) el crédito SOLO entra vía webhook firmado.
+    if STRIPE_SECRET_KEY:
+        raise HTTPException(
+            status_code=403,
+            detail="Top-up manual deshabilitado en producción. Usa Stripe Checkout.",
+        )
     business.balance_cents += data.amount_cents
     db.commit()
     return {
@@ -513,6 +542,20 @@ def trigger_webhook(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
+    # SSRF protection: solo http/https, nunca IPs privadas/loopback/metadata cloud
+    parsed = urlparse(wh.url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="URL de webhook inválida (solo http/https)")
+
+    hostname = parsed.hostname
+    try:
+        ip = socket.gethostbyname(hostname)
+        addr = ipaddress.ip_address(ip)
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_multicast:
+            raise HTTPException(status_code=400, detail="URL de webhook apunta a una dirección bloqueada")
+    except (socket.gaierror, socket.timeout, OSError, ValueError):
+        raise HTTPException(status_code=400, detail="No se pudo resolver el host del webhook")
+
     payload = {
         "event": "plan_liked",
         "user": {"id": user.id, "username": user.username},
@@ -545,7 +588,8 @@ def trigger_webhook(
                 "response_body": resp.text[:500],
             }
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error al llamar al webhook: {str(e)}")
+        # No devolver detalles internos del error (fuga de información)
+        raise HTTPException(status_code=502, detail="Error al llamar al webhook")
 
 
 # --- Stripe Payments ---
@@ -602,17 +646,19 @@ def create_checkout_session(
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     """Handle Stripe webhook events (checkout.session.completed)."""
+    # Seguridad: sin STRIPE_WEBHOOK_SECRET el webhook se rechaza SIEMPRE (fail-closed).
+    # Un atacante podría POSTear un checkout.session.completed falso y recibir crédito gratis.
     if not STRIPE_WEBHOOK_SECRET:
-        # Fallback: no verification (dev mode)
-        payload = await request.body()
-        event = json.loads(payload)
-    else:
-        payload = await request.body()
-        sig_header = request.headers.get("stripe-signature")
-        try:
-            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-        except stripe.error.SignatureVerificationError:
-            raise HTTPException(status_code=400, detail="Invalid signature")
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook no configurado (falta STRIPE_WEBHOOK_SECRET).",
+        )
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
