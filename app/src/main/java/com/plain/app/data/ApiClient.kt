@@ -4,55 +4,87 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
-    // For Android emulator, 10.0.2.2 maps to host machine localhost
-    // For real device, use computer's local IP
-    private const val BASE_URL = "http://10.0.2.2:8000/"
+    // For production, use Railway URL
+    private const val BASE_URL = "https://plain-production-9cd6.up.railway.app/"
 
-    private var authToken: String? = null
+    // Token storage
+    private var userToken: String? = null
+    private var businessToken: String? = null
 
     // Flow that emits when a 401 is received — the UI observes this to redirect to login
     private val _sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val sessionExpired: SharedFlow<Unit> = _sessionExpired
 
-    fun setToken(token: String?) {
-        authToken = token
+    fun setUserToken(token: String?) {
+        userToken = token
     }
 
-    fun getToken(): String? = authToken
+    fun setBusinessToken(token: String?) {
+        businessToken = token
+    }
+
+    fun getUserToken(): String? = userToken
+    fun getBusinessToken(): String? = businessToken
+
+    // Legacy
+    fun setToken(token: String?) {
+        setUserToken(token)
+    }
+    fun getToken(): String? = getUserToken()
 
     private val authInterceptor = Interceptor { chain ->
         val request = chain.request().newBuilder()
-        authToken?.let {
+        val path = chain.request().url.encodedPath
+
+        val tokenToUse = when {
+            path.contains("api/business") && businessToken != null -> businessToken
+            userToken != null -> userToken
+            else -> null
+        }
+        tokenToUse?.let {
             request.addHeader("Authorization", "Bearer $it")
         }
+
         val response = chain.proceed(request.build())
 
-        // On 401: clear token and notify so the UI can redirect to login
-        // Skip login/register to avoid infinite redirect on auth failures
-        val path = chain.request().url.encodedPath
-        if (response.code == 401 && !path.contains("api/login") && !path.contains("api/register")) {
-            authToken = null
-            AuthManager.clearToken()
+        if (response.code == 401 &&
+            !path.contains("api/login") &&
+            !path.contains("api/register") &&
+            !path.contains("api/business/login") &&
+            !path.contains("api/business/register")
+        ) {
+            if (path.contains("api/business")) {
+                businessToken = null
+            } else {
+                userToken = null
+            }
             _sessionExpired.tryEmit(Unit)
         }
-
         response
-    }
-
-    private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
     }
 
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(authInterceptor)
-        .addInterceptor(loggingInterceptor)
+        .apply {
+            // Logging interceptor solo en debug (importado vía debugImplementation)
+            try {
+                val loggingInterceptor = Class.forName("okhttp3.logging.HttpLoggingInterceptor")
+                    .getDeclaredConstructor().newInstance()
+                loggingInterceptor.javaClass.getMethod("setLevel",
+                    Class.forName("okhttp3.logging.HttpLoggingInterceptor\$Level"))
+                    .invoke(loggingInterceptor,
+                        Class.forName("okhttp3.logging.HttpLoggingInterceptor\$Level").getField("BODY").get(null))
+                addInterceptor(loggingInterceptor as Interceptor)
+            } catch (_: Exception) {
+                // Logging interceptor only available in debug builds — silently skip in release
+            }
+        }
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

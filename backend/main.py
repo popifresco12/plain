@@ -88,6 +88,12 @@ os.makedirs(web_dir, exist_ok=True)
 app.mount("/business", StaticFiles(directory=web_dir, html=True), name="business")
 
 
+@app.get("/health")
+def health_check():
+    """Healthcheck para orquestadores (Railway, Docker HEALTHCHECK)."""
+    return {"status": "ok"}
+
+
 # === Seed data ===
 
 SEED_PLANS = [
