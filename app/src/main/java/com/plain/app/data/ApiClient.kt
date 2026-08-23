@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 object ApiClient {
 
     // Backend local via Cloudflare tunnel (para pruebas en Villena)
-    private const val BASE_URL = "https://answers-hitachi-lessons-cancel.trycloudflare.com/"
+    private const val BASE_URL = "https://html-marina-ordinance-manager.trycloudflare.com/"
 
     // Token storage
     private var userToken: String? = null

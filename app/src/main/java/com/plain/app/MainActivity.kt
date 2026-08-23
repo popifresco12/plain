@@ -9,16 +9,21 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.plain.app.data.ApiClient
 import com.plain.app.data.AuthManager
+import com.plain.app.data.CityPreferences
+import com.plain.app.data.LocationHelper
 import com.plain.app.data.auth.BiometricAuthHelper
 import com.plain.app.ui.screens.BiometricSettingsScreen
 import com.plain.app.ui.screens.BiometricUnlockScreen
 import com.plain.app.ui.screens.CitySelectionScreen
+import com.plain.app.ui.screens.CreatePlanScreen
 import com.plain.app.ui.screens.FavoritesScreen
 import com.plain.app.ui.screens.LoginScreen
 import com.plain.app.ui.screens.RegisterScreen
 import com.plain.app.ui.screens.SettingsScreen
 import com.plain.app.ui.screens.SwipeScreen
 import com.plain.app.ui.theme.PLAINTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,6 +31,7 @@ class MainActivity : ComponentActivity() {
 
         // Load saved token
         AuthManager.init(this)
+        val appContext = applicationContext
 
         setContent {
             val navController = rememberNavController()
@@ -45,7 +51,7 @@ class MainActivity : ComponentActivity() {
                     composable("login") {
                         LoginScreen(
                             onLoginSuccess = {
-                                navController.navigate("city_selection") {
+                                navController.navigate("resolve_city") {
                                     popUpTo("login") { inclusive = true }
                                 }
                             },
@@ -57,7 +63,7 @@ class MainActivity : ComponentActivity() {
                     composable("register") {
                         RegisterScreen(
                             onRegisterSuccess = {
-                                navController.navigate("city_selection") {
+                                navController.navigate("resolve_city") {
                                     popUpTo("register") { inclusive = true }
                                 }
                             },
@@ -66,22 +72,59 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // User main flow
-                    composable("city_selection") {
-                        CitySelectionScreen(
-                            onCitySelected = { city ->
-                                navController.navigate("swipe/$city")
+                    // Resolver ciudad: guardada > GPS > selector manual
+                    composable("resolve_city") {
+                        val context = appContext
+                        var resolved by remember { mutableStateOf<String?>(null) }
+                        LaunchedEffect(Unit) {
+                            resolved = withContext(Dispatchers.IO) {
+                                CityPreferences.getCity(context) ?: run {
+                                    val gps = LocationHelper.detectCity(context)
+                                    if (gps != null) {
+                                        CityPreferences.setGpsDetectedCity(context, gps)
+                                        gps
+                                    } else null
+                                }
                             }
-                        )
+                        }
+                        val city = resolved
+                        if (city != null) {
+                            LaunchedEffect(city) {
+                                navController.navigate("swipe/$city") {
+                                    popUpTo("resolve_city") { inclusive = true }
+                                }
+                            }
+                        } else {
+                            CitySelectionScreen(
+                                onCitySelected = { c ->
+                                    CityPreferences.setCity(context, c)
+                                    navController.navigate("swipe/$c") {
+                                        popUpTo("resolve_city") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
                     }
 
+                    // User main flow
                     composable("swipe/{cityName}") { backStackEntry ->
                         val cityName = backStackEntry.arguments?.getString("cityName") ?: "BARCELONA"
+                        CityPreferences.setCity(appContext, cityName) // recordar la última
                         SwipeScreen(
                             city = cityName,
                             onBack = { navController.popBackStack() },
                             onSettings = { navController.navigate("settings") },
-                            onFavorites = { navController.navigate("favorites") }
+                            onFavorites = { navController.navigate("favorites") },
+                            onCreatePlan = { navController.navigate("create_plan/$cityName") }
+                        )
+                    }
+
+                    composable("create_plan/{cityName}") { backStackEntry ->
+                        val cityName = backStackEntry.arguments?.getString("cityName") ?: "BARCELONA"
+                        CreatePlanScreen(
+                            city = cityName,
+                            onBack = { navController.popBackStack() },
+                            onCreated = { navController.popBackStack() }
                         )
                     }
 
@@ -99,7 +142,24 @@ class MainActivity : ComponentActivity() {
                                     popUpTo(0) { inclusive = true }
                                 }
                             },
-                            onBiometricSettings = { navController.navigate("biometric_settings") }
+                            onBiometricSettings = { navController.navigate("biometric_settings") },
+                            onChangeCity = {
+                                navController.navigate("city_picker") {
+                                    popUpTo("settings") { inclusive = false }
+                                }
+                            }
+                        )
+                    }
+
+                    // Selector de ciudad desde ajustes (cambiar manualmente)
+                    composable("city_picker") {
+                        CitySelectionScreen(
+                            onCitySelected = { c ->
+                                CityPreferences.setCity(appContext, c)
+                                navController.navigate("swipe/$c") {
+                                    popUpTo("city_picker") { inclusive = true }
+                                }
+                            }
                         )
                     }
 

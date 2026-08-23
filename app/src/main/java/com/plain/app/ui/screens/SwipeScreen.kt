@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
@@ -41,7 +42,8 @@ fun SwipeScreen(
     city: String,
     onBack: () -> Unit,
     onSettings: () -> Unit,
-    onFavorites: () -> Unit
+    onFavorites: () -> Unit,
+    onCreatePlan: () -> Unit
 ) {
     var plans by remember { mutableStateOf<List<PlanResponse>>(emptyList()) }
     var currentIndex by remember { mutableIntStateOf(0) }
@@ -86,7 +88,11 @@ fun SwipeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (city == "BARCELONA") "🌊 Barcelona" else "🏰 Villena",
+                        text = when (city) {
+                            "BARCELONA" -> "🌊 Barcelona"
+                            "ALICANTE" -> "🌴 Alicante"
+                            else -> "🏰 Villena"
+                        },
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -96,6 +102,9 @@ fun SwipeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onCreatePlan) {
+                        Icon(Icons.Default.Add, contentDescription = "Crear plan", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = onFavorites) {
                         Icon(Icons.Default.Favorite, contentDescription = "Favoritos", tint = MaterialTheme.colorScheme.primary)
                     }

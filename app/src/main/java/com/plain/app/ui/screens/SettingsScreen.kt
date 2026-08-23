@@ -26,7 +26,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
-    onBiometricSettings: () -> Unit
+    onBiometricSettings: () -> Unit,
+    onChangeCity: () -> Unit
 ) {
     var webhookUrl by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
@@ -159,6 +160,37 @@ fun SettingsScreen(
             if (saved) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("✅ Webhook guardado correctamente", color = MaterialTheme.colorScheme.primary)
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Divider()
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // City section
+            Text(
+                text = "📍 Ciudad",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "La app detecta tu ciudad por ubicación automáticamente. Cámbiala aquí si quieres explorar otra.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onChangeCity,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Cambiar ciudad", fontWeight = FontWeight.Medium)
             }
 
             Spacer(modifier = Modifier.height(32.dp))
