@@ -1,6 +1,6 @@
 import json
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, UniqueConstraint, Date
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -46,6 +46,11 @@ class Plan(Base):
     price = Column(String(50), nullable=False, default="0€")
     plan_type = Column(String(20), nullable=False, default="AMBOS")  # SOLO, PAREJA, AMBOS
     duration = Column(String(50), nullable=False, default="2h")
+    availability = Column(String(200), nullable=False, default="Todo el año")  # Ej: "Todo el año", "Septiembre", "Fines de semana"
+    # Availability dates (auto activation): NULL = always available
+    available_from = Column(Date, nullable=True)   # First day the plan is shown (e.g. 2026-09-04)
+    available_until = Column(Date, nullable=True)  # Last day the plan is shown (e.g. 2026-09-08)
+    recurring = Column(String(100), nullable=True) # Comma days "MON,WED,FRI" for weekly recurring; NULL = every day
     category = Column(String(100), nullable=False, default="Ocio")
     city = Column(String(50), nullable=False)  # BARCELONA, VILLENA
     emoji = Column(String(10), nullable=False, default="📍")
@@ -122,3 +127,39 @@ class WebhookConfig(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="webhook")
+
+
+class TripGroup(Base):
+    """Grupo tipo BlaBlaCar: gente que va junta a un plan (viaje compartido)."""
+    __tablename__ = "trip_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("plans.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String(200), nullable=False)          # "Quedada al Medievo de Villena"
+    meeting_point = Column(String(300), nullable=True)   # "Puerta del castillo"
+    meet_at = Column(DateTime, nullable=True)            # Cuándo quedan
+    seats = Column(Integer, default=4)                   # Plazas totales (coche)
+    transport = Column(String(50), default="COCHE")      # COCHE, ANDANDO, BUS, MOTO
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    plan = relationship("Plan")
+    owner = relationship("User")
+    members = relationship("TripGroupMember", back_populates="group", cascade="all, delete-orphan")
+
+
+class TripGroupMember(Base):
+    __tablename__ = "trip_group_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("trip_groups.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    group = relationship("TripGroup", back_populates="members")
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint("group_id", "user_id", name="uq_group_user"),
+    )

@@ -2,6 +2,7 @@ import ipaddress
 import json
 import os
 import socket
+from datetime import date, datetime
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -24,7 +25,7 @@ from auth import (
     verify_password,
 )
 from database import Base, SessionLocal, engine, get_db
-from models import Business, DislikedTag, Favorite, Plan, User, WebhookConfig
+from models import Business, DislikedTag, Favorite, Plan, TripGroup, TripGroupMember, User, WebhookConfig
 from schemas import (
     BudgetTopUp,
     BusinessLogin,
@@ -44,6 +45,9 @@ from schemas import (
     UserResponse,
     WebhookConfigCreate,
     WebhookConfigResponse,
+    TripGroupCreate,
+    TripGroupMemberOut,
+    TripGroupResponse,
 )
 
 # Create tables
@@ -104,25 +108,34 @@ SEED_PLANS = [
     {"title": "Bunkers del Carmel", "description": "Las mejores vistas de Barcelona gratis. Lleva cerveza y ponte al atardecer.", "location": "Turó de la Rovira", "price": "0€", "plan_type": "AMBOS", "duration": "1.5h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "📸", "tags": ["vistas", "gratis", "atardecer", "foto"]},
     {"title": "Ruta graffiti por el Raval", "description": "Arte urbano, murales enormes y galerías callejeras. Recorrido autoguiado.", "location": "El Raval", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "🎨", "tags": ["arte", "gratis", "paseo", "solo"]},
     {"title": "Picnic en la Ciutadella", "description": "El parque más bonito de la ciudad. Ideal para llevar queso, vino y manta.", "location": "Parc de la Ciutadella", "price": "5€", "plan_type": "PAREJA", "duration": "2h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🧺", "tags": ["naturaleza", "romantico", "picnic", "barato"]},
-    {"title": "Museo Picasso (domingo gratis)", "description": "Entrada gratuita desde las 15h los domingos. Una de las mejores colecciones.", "location": "El Born", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "🖼️", "tags": ["arte", "cultura", "gratis", "museo"]},
+    {"title": "Museo Picasso (domingo gratis)", "description": "Entrada gratuita desde las 15h los domingos. Una de las mejores colecciones.", "location": "El Born", "price": "0€", "plan_type": "SOLO", "duration": "2h", "availability": "Domingos desde las 15h", "category": "Cultura", "city": "BARCELONA", "emoji": "🖼️", "tags": ["arte", "cultura", "gratis", "museo"], "recurring": "SUN"},
     {"title": "Baño en la Barceloneta + vermut", "description": "Día de playa urbana con baño y luego vermut en un chiringuito.", "location": "Barceloneta", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🏖️", "tags": ["playa", "gratis", "comida", "verano"]},
     {"title": "Ruta modernista por el Eixample", "description": "Recorrido gratuito: Casa Batlló, La Pedrera, Sagrada Família desde fuera.", "location": "Eixample", "price": "0€", "plan_type": "SOLO", "duration": "2.5h", "category": "Cultura", "city": "BARCELONA", "emoji": "🏛️", "tags": ["arquitectura", "cultura", "gratis", "paseo", "solo"]},
-    {"title": "Mercat dels Encants", "description": "Mercadillo de domingo con gangas, antigüedades y objetos únicos.", "location": "Glòries", "price": "0€", "plan_type": "AMBOS", "duration": "2h", "category": "Compras", "city": "BARCELONA", "emoji": "🛍️", "tags": ["compras", "mercadillo", "gratis"]},
+    {"title": "Mercat dels Encants", "description": "Mercadillo de domingo con gangas, antigüedades y objetos únicos.", "location": "Glòries", "price": "0€", "plan_type": "AMBOS", "duration": "2h", "availability": "Lun, mié, vie y sáb (mañanas)", "category": "Compras", "city": "BARCELONA", "emoji": "🛍️", "tags": ["compras", "mercadillo", "gratis"], "recurring": "MON,WED,FRI,SAT"},
     {"title": "Pasear por el Laberinto de Horta", "description": "El jardín laberíntico más antiguo de Barcelona. Entrada 3€.", "location": "Horta", "price": "3€", "plan_type": "PAREJA", "duration": "1.5h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🌳", "tags": ["naturaleza", "jardines", "romantico", "barato"]},
     {"title": "Ruta gótica + calles escondidas", "description": "Descubre el Barri Gòtic: el Puente del Obispo, la Catedral y plazas secretas.", "location": "Barri Gòtic", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "BARCELONA", "emoji": "📷", "tags": ["arquitectura", "paseo", "gratis", "foto", "solo"]},
     {"title": "Montjuïc: jardins + castillo", "description": "Subida a pie o en teleférico, jardines botánicos y vistas al puerto.", "location": "Montjuïc", "price": "0€", "plan_type": "SOLO", "duration": "3h", "category": "Naturaleza", "city": "BARCELONA", "emoji": "🏰", "tags": ["naturaleza", "vistas", "gratis", "paseo", "solo"]},
-    {"title": "Sónar de día", "description": "Entrada de día al Sónar. Música, arte digital y ambiente único.", "location": "Fira Gran Via", "price": "12€", "plan_type": "AMBOS", "duration": "4h", "category": "Música", "city": "BARCELONA", "emoji": "🎧", "tags": ["musica", "festival", "arte", "pago"]},
+    {"title": "Sónar de día", "description": "Entrada de día al Sónar. Música, arte digital y ambiente único.", "location": "Fira Gran Via", "price": "12€", "plan_type": "AMBOS", "duration": "4h", "availability": "Junio (festival Sónar)", "category": "Música", "city": "BARCELONA", "emoji": "🎧", "tags": ["musica", "festival", "arte", "pago"], "available_from": "2026-06-16", "available_until": "2026-06-21"},
     # Villena
     {"title": "Castillo de la Atalaya", "description": "Impresionante castillo medieval con vistas a todo el Valle. Visita guiada 3€.", "location": "Castillo", "price": "3€", "plan_type": "AMBOS", "duration": "1.5h", "category": "Cultura", "city": "VILLENA", "emoji": "🏰", "tags": ["castillo", "historia", "cultura", "barato"]},
     {"title": "Ruta senderismo Sierra de la Villa", "description": "Ruta circular de 6km por la sierra con vistas al castillo y al valle.", "location": "Sierra de la Villa", "price": "0€", "plan_type": "SOLO", "duration": "3h", "category": "Naturaleza", "city": "VILLENA", "emoji": "🥾", "tags": ["senderismo", "naturaleza", "gratis", "deporte", "solo"]},
     {"title": "Paseo casco antiguo + tapas", "description": "Calles empedradas, plazas con encanto y tapeo de calidad a precios de pueblo.", "location": "Casco antiguo", "price": "10€", "plan_type": "PAREJA", "duration": "2h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🥘", "tags": ["comida", "paseo", "romantico", "cultura"]},
-    {"title": "Street Food Market", "description": "Comida internacional, música en directo y artesanía. Entrada gratuita.", "location": "Recinto Ferial", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🍔", "tags": ["comida", "mercado", "gratis", "musica"]},
+    {"title": "Street Food Market", "description": "Comida internacional, música en directo y artesanía. Entrada gratuita.", "location": "Recinto Ferial", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "availability": "Eventos puntuales (consulta fechas)", "category": "Gastronomía", "city": "VILLENA", "emoji": "🍔", "tags": ["comida", "mercado", "gratis", "musica"]},
     {"title": "Ruta en bici por Las Virtudes", "description": "Ruta fácil en bici hasta el Santuario de Las Virtudes, rodeado de naturaleza.", "location": "Las Virtudes", "price": "0€", "plan_type": "SOLO", "duration": "2h", "category": "Deporte", "city": "VILLENA", "emoji": "🚴", "tags": ["deporte", "naturaleza", "gratis", "bici", "solo"]},
-    {"title": "Mercado de diseño", "description": "Puestos de cerámica, ilustración y diseño local.", "location": "Recinto Ferial", "price": "0€", "plan_type": "PAREJA", "duration": "1h", "category": "Compras", "city": "VILLENA", "emoji": "🎨", "tags": ["compras", "arte", "mercadillo", "gratis"]},
+    {"title": "Mercado de diseño", "description": "Puestos de cerámica, ilustración y diseño local.", "location": "Recinto Ferial", "price": "0€", "plan_type": "PAREJA", "duration": "1h", "availability": "Fechas concretas (mercados puntuales)", "category": "Compras", "city": "VILLENA", "emoji": "🎨", "tags": ["compras", "arte", "mercadillo", "gratis"]},
     {"title": "Día de piscina natural", "description": "Baño en el Pantano de Villena. Lleva nevera y sombrilla.", "location": "Pantano de Villena", "price": "0€", "plan_type": "SOLO", "duration": "Todo el día", "category": "Naturaleza", "city": "VILLENA", "emoji": "🏊", "tags": ["naturaleza", "gratis", "verano", "baño", "solo"]},
     {"title": "Teatro Chapí", "description": "Obra de teatro o cine de cartelera en el teatro histórico.", "location": "Teatro Chapí", "price": "5-8€", "plan_type": "PAREJA", "duration": "2h", "category": "Cultura", "city": "VILLENA", "emoji": "🎭", "tags": ["teatro", "cultura", "romantico", "barato"]},
-    {"title": "Fiestas del Medievo", "description": "Mercado medieval, justas, música y animación callejera.", "location": "Centro histórico", "price": "0€", "plan_type": "AMBOS", "duration": "4h", "category": "Cultura", "city": "VILLENA", "emoji": "⚔️", "tags": ["fiestas", "cultura", "gratis", "historia"]},
+    {"title": "Fiestas del Medievo", "description": "Mercado medieval, justas, música y animación callejera.", "location": "Centro histórico", "price": "0€", "plan_type": "AMBOS", "duration": "4h", "availability": "Septiembre (fechas oficiales del Ayto.)", "category": "Cultura", "city": "VILLENA", "emoji": "⚔️", "tags": ["fiestas", "cultura", "gratis", "historia"], "available_from": "2026-09-04", "available_until": "2026-09-08"},
     {"title": "Cata de vinos local", "description": "Degustación de vinos de la DOP Alicante en bodegas familiares.", "location": "Bodega local", "price": "5-10€", "plan_type": "PAREJA", "duration": "1.5h", "category": "Gastronomía", "city": "VILLENA", "emoji": "🍷", "tags": ["comida", "vino", "romantico", "barato"]},
+    # Alicante (nueva ciudad)
+    {"title": "Castillo de Santa Bárbara", "description": "El castillo más grande de la zona, sube en ascensor gratis y disfruta las vistas al mar.", "location": "Monte Benacantil", "price": "0€", "plan_type": "AMBOS", "duration": "2h", "category": "Cultura", "city": "ALICANTE", "emoji": "🏰", "tags": ["castillo", "cultura", "gratis", "vistas"]},
+    {"title": "Explanada de España + puerto", "description": "Paseo por el paseo de mosaicos, el puerto deportivo y helado artesanal.", "location": "Explanada", "price": "0€", "plan_type": "PAREJA", "duration": "1.5h", "category": "Ocio", "city": "ALICANTE", "emoji": "🌴", "tags": ["paseo", "gratis", "romantico", "mar"]},
+    {"title": "Hogueras de San Juan", "description": "Monumentos de fuego, música y ambiente en la noche más mágica del año.", "location": "Centro ciudad", "price": "0€", "plan_type": "AMBOS", "duration": "4h", "category": "Cultura", "city": "ALICANTE", "emoji": "🔥", "tags": ["fiestas", "fuego", "cultura", "gratis"], "available_from": "2026-06-19", "available_until": "2026-06-25"},
+    {"title": "Isla de Tabarca", "description": "Barco de ida y vuelta a la única isla habitada de la Comunitat. Playa y arroz.", "location": "Puerto de Alicante", "price": "15-20€", "plan_type": "PAREJA", "duration": "Todo el día", "category": "Naturaleza", "city": "ALICANTE", "emoji": "⛴️", "tags": ["isla", "playa", "barco", "romantico"], "available_from": "2026-06-01", "available_until": "2026-09-30"},
+    {"title": "Mercado Central de Alicante", "description": "Mercado modernista con productos frescos: fruta, pescado y dulces típicos.", "location": "Av. Alfonso X", "price": "0€", "plan_type": "SOLO", "duration": "1h", "category": "Compras", "city": "ALICANTE", "emoji": "🍊", "tags": ["mercado", "comida", "gratis", "solo"]},
+    {"title": "Playa del Postiguet", "description": "La playa urbana de Alicante, a 5 minutos del centro. Atardecer espectacular.", "location": "Postiguet", "price": "0€", "plan_type": "AMBOS", "duration": "3h", "category": "Naturaleza", "city": "ALICANTE", "emoji": "🏖️", "tags": ["playa", "gratis", "verano", "mar"]},
+    {"title": "Museo Arqueológico MARQ", "description": "Una de las mejores colecciones arqueológicas de España. Entrada 3€.", "location": "Plaza Dr. Gómez Ulla", "price": "3€", "plan_type": "SOLO", "duration": "2h", "category": "Cultura", "city": "ALICANTE", "emoji": "🏺", "tags": ["museo", "cultura", "arqueologia", "barato"]},
+    {"title": "Ruta por el Casco Antiguo (El Barrio)", "description": "Calles con escaleras, muralla y las mejores vistas al puerto al atardecer.", "location": "Casco Antiguo", "price": "0€", "plan_type": "PAREJA", "duration": "2h", "category": "Cultura", "city": "ALICANTE", "emoji": "🏘️", "tags": ["paseo", "vistas", "gratis", "romantico"]},
 ]
 
 
@@ -354,10 +367,13 @@ def list_plans(
     city: Optional[str] = None,
     plan_type: Optional[str] = None,
     category: Optional[str] = None,
+    only_available: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """List plans: free + active sponsored, sorted with user's disliked tags last."""
+    """List plans: free + active sponsored, sorted with user's disliked tags last.
+    Filters by date availability when only_available=True (or always excludes
+    plans whose date window has fully ended)."""
     query = db.query(Plan).filter(
         Plan.is_default == True  # Free seed plans
     )
@@ -382,6 +398,24 @@ def list_plans(
     # Combine: free first, then sponsored (interleaved)
     all_plans = list(free_plans) + list(sponsored_plans)
 
+    # Date availability filter
+    today = date.today()
+    def is_available(p: Plan) -> bool:
+        if not p.is_active:
+            return False
+        if p.available_from and today < p.available_from:
+            return False
+        if p.available_until and today > p.available_until:
+            return False
+        if p.recurring:
+            days = [d.strip().upper() for d in p.recurring.split(",") if d.strip()]
+            if days and today.strftime("%a").upper() not in days:
+                return False
+        return True
+
+    if only_available:
+        all_plans = [p for p in all_plans if is_available(p)]
+
     # Deprioritize by disliked tags
     disliked: list[DislikedTag] = db.query(DislikedTag).filter(
         DislikedTag.user_id == user.id,
@@ -394,6 +428,10 @@ def list_plans(
             p_tags = p.get_tags()
             return sum(1 for t in p_tags if t in disliked_tag_set)
         all_plans.sort(key=plan_score)
+
+    # Annotate availability
+    for p in all_plans:
+        p.is_available_now = is_available(p)
 
     return all_plans
 
@@ -678,6 +716,117 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 db.commit()
                 print(f"✅ Stripe: {biz.company_name} recargó {amount_cents}¢ (balance: {biz.balance_cents}¢)")
 
+    return {"status": "ok"}
+
+
+# === Trip groups (BlaBlaCar-style quedadas) ===
+
+@app.get("/api/plans/{plan_id}/groups", response_model=list[TripGroupResponse])
+def list_plan_groups(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Lista los grupos (quedadas) de un plan."""
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    groups = db.query(TripGroup).filter(TripGroup.plan_id == plan_id).all()
+    result = []
+    for g in groups:
+        resp = TripGroupResponse(
+            id=g.id, plan_id=g.plan_id, plan_title=plan.title,
+            owner_id=g.owner_id, owner_username=g.owner.username if g.owner else "",
+            title=g.title, meeting_point=g.meeting_point, meet_at=g.meet_at,
+            seats=g.seats, transport=g.transport, notes=g.notes, created_at=g.created_at,
+        )
+        resp.members = [TripGroupMemberOut(user_id=m.user_id, username=m.user.username if m.user else "", joined_at=m.joined_at) for m in g.members]
+        resp.seats_taken = len(g.members)
+        result.append(resp)
+    return result
+
+
+@app.post("/api/plans/{plan_id}/groups", response_model=TripGroupResponse)
+def create_plan_group(
+    plan_id: int,
+    data: TripGroupCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Crea una quedada (grupo) para ir a un plan, tipo BlaBlaCar."""
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    group = TripGroup(
+        plan_id=plan_id, owner_id=user.id, title=data.title,
+        meeting_point=data.meeting_point, meet_at=data.meet_at,
+        seats=max(1, data.seats), transport=data.transport, notes=data.notes,
+    )
+    db.add(group)
+    db.flush()
+    # El creador es miembro automáticamente
+    member = TripGroupMember(group_id=group.id, user_id=user.id)
+    db.add(member)
+    db.commit()
+    db.refresh(group)
+    resp = TripGroupResponse(
+        id=group.id, plan_id=group.plan_id, plan_title=plan.title,
+        owner_id=group.owner_id, owner_username=user.username,
+        title=group.title, meeting_point=group.meeting_point, meet_at=group.meet_at,
+        seats=group.seats, transport=group.transport, notes=group.notes, created_at=group.created_at,
+    )
+    resp.members = [TripGroupMemberOut(user_id=user.id, username=user.username, joined_at=member.joined_at)]
+    resp.seats_taken = 1
+    return resp
+
+
+@app.post("/api/groups/{group_id}/join", response_model=TripGroupResponse)
+def join_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Apúntate a una quedada si quedan plazas."""
+    group = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    exists = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id
+    ).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="Ya estás en este grupo")
+    if len(group.members) >= group.seats:
+        raise HTTPException(status_code=400, detail="Grupo completo")
+    member = TripGroupMember(group_id=group_id, user_id=user.id)
+    db.add(member)
+    db.commit()
+    db.refresh(group)
+    plan = db.query(Plan).filter(Plan.id == group.plan_id).first()
+    resp = TripGroupResponse(
+        id=group.id, plan_id=group.plan_id, plan_title=plan.title if plan else "",
+        owner_id=group.owner_id, owner_username=group.owner.username if group.owner else "",
+        title=group.title, meeting_point=group.meeting_point, meet_at=group.meet_at,
+        seats=group.seats, transport=group.transport, notes=group.notes, created_at=group.created_at,
+    )
+    resp.members = [TripGroupMemberOut(user_id=m.user_id, username=m.user.username if m.user else "", joined_at=m.joined_at) for m in group.members]
+    resp.seats_taken = len(group.members)
+    return resp
+
+
+@app.delete("/api/groups/{group_id}/leave")
+def leave_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Sal de una quedada."""
+    member = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="No estás en este grupo")
+    db.delete(member)
+    db.commit()
     return {"status": "ok"}
 
 

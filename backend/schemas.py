@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 import json
 
 
@@ -41,10 +41,15 @@ class PlanCreate(BaseModel):
     price: str = "0€"
     plan_type: str = "AMBOS"
     duration: str = "2h"
+    availability: str = "Todo el año"
     category: str = "Ocio"
     city: str
     emoji: str = "📍"
     tags: list[str] = []
+    # Availability dates (auto activation)
+    available_from: Optional[date] = None
+    available_until: Optional[date] = None
+    recurring: Optional[str] = None  # "MON,WED,FRI" o None
 
 
 class PlanResponse(BaseModel):
@@ -55,6 +60,7 @@ class PlanResponse(BaseModel):
     price: str
     plan_type: str
     duration: str
+    availability: str = "Todo el año"
     category: str
     city: str
     emoji: str
@@ -68,6 +74,11 @@ class PlanResponse(BaseModel):
     spent_cents: int = 0
     cost_per_like_cents: int = 0
     is_active: bool = True
+    # Availability dates + computed flag
+    available_from: Optional[date] = None
+    available_until: Optional[date] = None
+    recurring: Optional[str] = None
+    is_available_now: bool = True  # Computed: active AND within dates
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -203,3 +214,46 @@ class WebhookConfigResponse(BaseModel):
 
 class WebhookTriggerRequest(BaseModel):
     plan_id: int
+
+
+# === Trip groups (BlaBlaCar-style) ===
+
+class TripGroupCreate(BaseModel):
+    plan_id: int
+    title: str
+    meeting_point: Optional[str] = None
+    meet_at: Optional[datetime] = None
+    seats: int = 4
+    transport: str = "COCHE"  # COCHE, ANDANDO, BUS, MOTO
+    notes: Optional[str] = None
+
+
+class TripGroupMemberOut(BaseModel):
+    user_id: int
+    username: str
+    joined_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TripGroupResponse(BaseModel):
+    id: int
+    plan_id: int
+    plan_title: str = ""
+    owner_id: int
+    owner_username: str = ""
+    title: str
+    meeting_point: Optional[str] = None
+    meet_at: Optional[datetime] = None
+    seats: int
+    transport: str
+    notes: Optional[str] = None
+    created_at: datetime
+    members: list[TripGroupMemberOut] = []
+    seats_taken: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TripGroupJoin(BaseModel):
+    pass

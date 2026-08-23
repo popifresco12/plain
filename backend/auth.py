@@ -3,12 +3,15 @@ from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
+from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User, Business
+
+load_dotenv()
 
 SECRET_KEY = os.environ.get("PLAIN_SECRET_KEY", "")
 if not SECRET_KEY:
