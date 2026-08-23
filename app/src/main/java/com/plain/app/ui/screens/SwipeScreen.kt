@@ -43,7 +43,8 @@ fun SwipeScreen(
     onBack: () -> Unit,
     onSettings: () -> Unit,
     onFavorites: () -> Unit,
-    onCreatePlan: () -> Unit
+    onCreatePlan: () -> Unit,
+    planCreated: Boolean = false
 ) {
     var plans by remember { mutableStateOf<List<PlanResponse>>(emptyList()) }
     var currentIndex by remember { mutableIntStateOf(0) }
@@ -54,10 +55,12 @@ fun SwipeScreen(
     var showInfoDialog by remember { mutableStateOf<PlanResponse?>(null) }
     var webhookAvailable by remember { mutableStateOf(false) }
     var feedbackText by remember { mutableStateOf<String?>(null) }
+    var refreshKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
-    // Load plans from API
-    LaunchedEffect(city) {
+    // Load plans from API (recarga al cambiar ciudad O al volver de crear plan)
+    LaunchedEffect(city, refreshKey, planCreated) {
+        if (planCreated) refreshKey++
         try {
             val resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
             if (resp.isSuccessful) {

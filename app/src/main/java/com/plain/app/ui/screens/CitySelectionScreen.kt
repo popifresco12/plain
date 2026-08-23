@@ -14,10 +14,48 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Estructura: país -> regiones -> ciudades soportadas por la app
+private data class CityOption(val code: String, val name: String)
+private data class RegionOption(val name: String, val cities: List<CityOption>)
+private data class CountryOption(val name: String, val regions: List<RegionOption>)
+
+private val COUNTRIES = listOf(
+    CountryOption(
+        name = "España",
+        regions = listOf(
+            RegionOption(
+                name = "Comunidad Valenciana",
+                cities = listOf(
+                    CityOption("ALICANTE", "Alicante"),
+                    CityOption("VILLENA", "Villena"),
+                    CityOption("VALENCIA", "Valencia"),
+                )
+            ),
+            RegionOption(
+                name = "Cataluña",
+                cities = listOf(CityOption("BARCELONA", "Barcelona"))
+            ),
+            RegionOption(
+                name = "Comunidad de Madrid",
+                cities = listOf(CityOption("MADRID", "Madrid"))
+            ),
+            RegionOption(
+                name = "Andalucía",
+                cities = listOf(CityOption("SEVILLA", "Sevilla"))
+            ),
+        )
+    ),
+)
+
 @Composable
 fun CitySelectionScreen(
     onCitySelected: (String) -> Unit
 ) {
+    var selectedCountry by remember { mutableStateOf(COUNTRIES.first().name) }
+    var selectedRegion by remember { mutableStateOf<String?>(null) }
+
+    val country = COUNTRIES.firstOrNull { it.name == selectedCountry } ?: COUNTRIES.first()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -45,7 +83,7 @@ fun CitySelectionScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = "¿Dónde quieres planear?",
@@ -55,38 +93,49 @@ fun CitySelectionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Barcelona card
-            CityCard(
-                emoji = "🌊",
-                name = "Barcelona",
-                description = "Ciudad, playa, cultura y tapas",
-                plans = "14 planes",
-                onClick = { onCitySelected("BARCELONA") }
+            // País
+            DropdownSelector(
+                label = "País",
+                value = selectedCountry,
+                options = COUNTRIES.map { it.name },
+                onSelect = {
+                    selectedCountry = it
+                    selectedRegion = null
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Villena card
-            CityCard(
-                emoji = "🏰",
-                name = "Villena",
-                description = "Castillo, naturaleza y vino",
-                plans = "10 planes",
-                onClick = { onCitySelected("VILLENA") }
+            // Región (una vez elegido país)
+            DropdownSelector(
+                label = "Región",
+                value = selectedRegion ?: "Selecciona una región",
+                options = country.regions.map { it.name },
+                onSelect = { selectedRegion = it }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Alicante card
-            CityCard(
-                emoji = "🌴",
-                name = "Alicante",
-                description = "Playa, castillo y hogueras",
-                plans = "8 planes",
-                onClick = { onCitySelected("ALICANTE") }
-            )
+            // Ciudades de la región seleccionada
+            val region = country.regions.firstOrNull { it.name == selectedRegion }
+            if (region != null) {
+                region.cities.forEach { city ->
+                    CityRow(
+                        name = city.name,
+                        planCount = "Planes disponibles",
+                        onClick = { onCitySelected(city.code) }
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            } else {
+                Text(
+                    text = "Elige una región para ver las ciudades",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = "Desliza → te gusta  |  Desliza ← siguiente",
@@ -98,57 +147,91 @@ fun CitySelectionScreen(
 }
 
 @Composable
-private fun CityCard(
-    emoji: String,
+private fun DropdownSelector(
+    label: String,
+    value: String,
+    options: List<String>,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(value, fontWeight = FontWeight.Medium)
+                    Text(if (expanded) "▲" else "▼", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.fillMaxWidth(0.85f)
+            ) {
+                options.forEach { opt ->
+                    DropdownMenuItem(
+                        text = { Text(opt) },
+                        onClick = {
+                            onSelect(opt)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CityRow(
     name: String,
-    description: String,
-    plans: String,
+    planCount: String,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = emoji,
-                fontSize = 48.sp,
-                modifier = Modifier.padding(end = 16.dp)
-            )
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = name,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = planCount,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = plans,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
             }
-
             Text(
                 text = "→",
-                fontSize = 28.sp,
+                fontSize = 22.sp,
                 color = MaterialTheme.colorScheme.primary
             )
         }

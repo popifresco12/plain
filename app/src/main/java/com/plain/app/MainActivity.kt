@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.plain.app.data.ApiClient
 import com.plain.app.data.AuthManager
@@ -47,7 +48,9 @@ class MainActivity : ComponentActivity() {
             }
 
             PLAINTheme {
-                NavHost(navController = navController, startDestination = "login") {
+                // Si ya hay sesión guardada, ir directo a resolver ciudad (sin login)
+                val startDest = if (AuthManager.getUserToken() != null) "resolve_city" else "login"
+                NavHost(navController = navController, startDestination = startDest) {
                     composable("login") {
                         LoginScreen(
                             onLoginSuccess = {
@@ -110,12 +113,19 @@ class MainActivity : ComponentActivity() {
                     composable("swipe/{cityName}") { backStackEntry ->
                         val cityName = backStackEntry.arguments?.getString("cityName") ?: "BARCELONA"
                         CityPreferences.setCity(appContext, cityName) // recordar la última
+                        val navBackStackEntry by navController.currentBackStackEntryAsState()
+                        val planCreated = navBackStackEntry?.savedStateHandle?.get<Boolean>("plan_created") ?: false
                         SwipeScreen(
                             city = cityName,
                             onBack = { navController.popBackStack() },
                             onSettings = { navController.navigate("settings") },
                             onFavorites = { navController.navigate("favorites") },
-                            onCreatePlan = { navController.navigate("create_plan/$cityName") }
+                            onCreatePlan = {
+                                navController.navigate("create_plan/$cityName") {
+                                    launchSingleTop = true
+                                }
+                            },
+                            planCreated = planCreated
                         )
                     }
 
@@ -124,7 +134,12 @@ class MainActivity : ComponentActivity() {
                         CreatePlanScreen(
                             city = cityName,
                             onBack = { navController.popBackStack() },
-                            onCreated = { navController.popBackStack() }
+                            onCreated = {
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set("plan_created", true)
+                                navController.popBackStack()
+                            }
                         )
                     }
 

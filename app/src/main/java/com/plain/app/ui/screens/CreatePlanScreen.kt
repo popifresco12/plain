@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.plain.app.data.ApiClient
 import com.plain.app.data.PlanCreateRequest
 import kotlinx.coroutines.launch
@@ -33,11 +34,12 @@ fun CreatePlanScreen(
     var availableUntil by remember { mutableStateOf("") }
     var recurring by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("Ocio") }
-    var emoji by remember { mutableStateOf("📍") }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val categories = listOf("Ocio", "Cultura", "Gastronomía", "Naturaleza", "Compras", "Música", "Deporte")
 
     val cityLabel = when (city) {
         "BARCELONA" -> "🌊 Barcelona"
@@ -72,14 +74,47 @@ fun CreatePlanScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            OutlinedTextField(
-                value = emoji,
-                onValueChange = { emoji = it },
-                label = { Text("Emoji") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
+            // Categoría (desplegable)
+            var catExpanded by remember { mutableStateOf(false) }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Categoría",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Box {
+                    OutlinedButton(
+                        onClick = { catExpanded = true },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(category, fontWeight = FontWeight.Medium)
+                            Text("▼", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = catExpanded,
+                        onDismissRequest = { catExpanded = false },
+                        modifier = Modifier.fillMaxWidth(0.85f)
+                    ) {
+                        categories.forEach { c ->
+                            DropdownMenuItem(
+                                text = { Text(c) },
+                                onClick = {
+                                    category = c
+                                    catExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -221,7 +256,7 @@ fun CreatePlanScreen(
                                     availability = availability,
                                     category = category.trim().ifBlank { "Ocio" },
                                     city = city,
-                                    emoji = emoji.trim().ifBlank { "📍" },
+                                    emoji = "📍",
                                     availableFrom = availableFrom.trim().ifBlank { null },
                                     availableUntil = availableUntil.trim().ifBlank { null },
                                     recurring = recurring.trim().ifBlank { null }

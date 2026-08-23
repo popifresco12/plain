@@ -51,7 +51,8 @@ fun PlanCardFromResponse(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
-            // Banner
+            // Banner: imagen por categoría (si existe) o color plano con emoji
+            val catRes = categoryImageRes(plan.category)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -59,7 +60,16 @@ fun PlanCardFromResponse(
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = plan.emoji, fontSize = 64.sp)
+                if (catRes != null) {
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(catRes),
+                        contentDescription = plan.category,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Text(text = plan.emoji, fontSize = 64.sp)
+                }
 
                 if (kotlin.math.abs(offsetX) > 50) {
                     Text(
@@ -307,5 +317,19 @@ fun parseDurationMillis(duration: String): Long {
             (num * 60_000).toLong()
         }
         else -> 2 * 3600_000L // default 2 hours
+    }
+}
+
+/** Mapa categoría -> imagen de banner (7 categorías). Null si no hay imagen. */
+fun categoryImageRes(category: String): Int? {
+    return when (category.trim().lowercase()) {
+        "ocio" -> com.plain.app.R.drawable.cat_ocio
+        "cultura" -> com.plain.app.R.drawable.cat_cultura
+        "gastronomía", "gastronomia", "comida" -> com.plain.app.R.drawable.cat_gastronomia
+        "naturaleza" -> com.plain.app.R.drawable.cat_naturaleza
+        "compras" -> com.plain.app.R.drawable.cat_compras
+        "música", "musica" -> com.plain.app.R.drawable.cat_musica
+        "deporte" -> com.plain.app.R.drawable.cat_deporte
+        else -> null
     }
 }
