@@ -132,6 +132,9 @@ class SponsoredPlanCreate(BaseModel):
     tags: list[str] = []
     budget_cents: int = 500       # Default 5€ budget
     cost_per_like_cents: int = 10  # Default 0.10€ per like
+    available_from: Optional[date] = None
+    available_until: Optional[date] = None
+    recurring: Optional[str] = None
 
 
 class SponsoredPlanResponse(BaseModel):
@@ -153,6 +156,10 @@ class SponsoredPlanResponse(BaseModel):
     is_active: bool
     likes_remaining: int = 0
     created_at: datetime
+    available_from: Optional[date] = None
+    available_until: Optional[date] = None
+    recurring: Optional[str] = None
+    is_available_now: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 

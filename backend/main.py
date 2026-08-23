@@ -273,6 +273,9 @@ def create_sponsored_plan(
         budget_cents=data.budget_cents,
         cost_per_like_cents=data.cost_per_like_cents,
         is_active=True,
+        available_from=data.available_from,
+        available_until=data.available_until,
+        recurring=data.recurring,
     )
     # Reserve budget
     business.balance_cents -= data.budget_cents
@@ -290,6 +293,8 @@ def list_sponsored_plans(
     plans = db.query(Plan).filter(
         Plan.business_id == business.id
     ).order_by(Plan.created_at.desc()).all()
+    for p in plans:
+        p.is_available_now = plan_is_available(p)
     return plans
 
 
@@ -362,6 +367,22 @@ def top_up_balance(
 # --- Plans (User) ---
 
 
+def plan_is_available(p: Plan) -> bool:
+    """Comprueba disponibilidad por fechas: ventana + días recurrentes."""
+    if not p.is_active:
+        return False
+    today = date.today()
+    if p.available_from and today < p.available_from:
+        return False
+    if p.available_until and today > p.available_until:
+        return False
+    if p.recurring:
+        days = [d.strip().upper() for d in p.recurring.split(",") if d.strip()]
+        if days and today.strftime("%a").upper() not in days:
+            return False
+    return True
+
+
 @app.get("/api/plans", response_model=list[PlanResponse])
 def list_plans(
     city: Optional[str] = None,
@@ -399,22 +420,8 @@ def list_plans(
     all_plans = list(free_plans) + list(sponsored_plans)
 
     # Date availability filter
-    today = date.today()
-    def is_available(p: Plan) -> bool:
-        if not p.is_active:
-            return False
-        if p.available_from and today < p.available_from:
-            return False
-        if p.available_until and today > p.available_until:
-            return False
-        if p.recurring:
-            days = [d.strip().upper() for d in p.recurring.split(",") if d.strip()]
-            if days and today.strftime("%a").upper() not in days:
-                return False
-        return True
-
     if only_available:
-        all_plans = [p for p in all_plans if is_available(p)]
+        all_plans = [p for p in all_plans if plan_is_available(p)]
 
     # Deprioritize by disliked tags
     disliked: list[DislikedTag] = db.query(DislikedTag).filter(
@@ -431,7 +438,7 @@ def list_plans(
 
     # Annotate availability
     for p in all_plans:
-        p.is_available_now = is_available(p)
+        p.is_available_now = plan_is_available(p)
 
     return all_plans
 
