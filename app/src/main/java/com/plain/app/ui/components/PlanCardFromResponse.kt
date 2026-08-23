@@ -135,6 +135,36 @@ fun PlanCardFromResponse(
                         Text("⏱ ${plan.duration}", style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
                     }
+                    // Chip de disponibilidad: ámbar si es de fechas concretas, neutro si es todo el año
+                    if (plan.availability.isNotBlank() && plan.availability != "Todo el año") {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer
+                        ) {
+                            Text("📅 ${plan.availability}", style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                        }
+                    }
+                    // Badge de disponibilidad actual: verde si se puede ahora, ámbar si no
+                    if (!plan.isAvailableNow) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = NopeRed.copy(alpha = 0.15f)
+                        ) {
+                            Text("🔒 Fuera de temporada", style = MaterialTheme.typography.labelSmall,
+                                color = NopeRed,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                        }
+                    } else if (plan.availability.isNotBlank() && plan.availability != "Todo el año") {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = LikeGreen.copy(alpha = 0.15f)
+                        ) {
+                            Text("✅ En temporada", style = MaterialTheme.typography.labelSmall,
+                                color = LikeGreen,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))

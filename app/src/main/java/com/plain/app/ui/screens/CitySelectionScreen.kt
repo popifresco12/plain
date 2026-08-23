@@ -75,6 +75,17 @@ fun CitySelectionScreen(
                 onClick = { onCitySelected("VILLENA") }
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Alicante card
+            CityCard(
+                emoji = "🌴",
+                name = "Alicante",
+                description = "Playa, castillo y hogueras",
+                plans = "8 planes",
+                onClick = { onCitySelected("ALICANTE") }
+            )
+
             Spacer(modifier = Modifier.height(48.dp))
 
             Text(

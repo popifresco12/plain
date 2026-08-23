@@ -77,4 +77,17 @@ interface ApiService {
     // ===== Business Top-up =====
     @POST("api/business/top-up")
     suspend fun topUpBalance(@Body body: BudgetTopUpRequest): Response<BudgetTopUpResponse>
+
+    // ===== Trip Groups (BlaBlaCar-style) =====
+    @GET("api/plans/{planId}/groups")
+    suspend fun getPlanGroups(@Path("planId") planId: Int): Response<List<TripGroupResponse>>
+
+    @POST("api/plans/{planId}/groups")
+    suspend fun createGroup(@Path("planId") planId: Int, @Body body: TripGroupCreateRequest): Response<TripGroupResponse>
+
+    @POST("api/groups/{groupId}/join")
+    suspend fun joinGroup(@Path("groupId") groupId: Int): Response<TripGroupResponse>
+
+    @DELETE("api/groups/{groupId}/leave")
+    suspend fun leaveGroup(@Path("groupId") groupId: Int): Response<FavoriteActionResponse>
 }

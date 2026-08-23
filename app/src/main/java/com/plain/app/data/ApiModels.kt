@@ -30,6 +30,7 @@ data class PlanResponse(
     val price: String,
     @SerializedName("plan_type") val planType: String,
     val duration: String,
+    @SerializedName("availability") val availability: String = "Todo el año",
     val category: String,
     val city: String,
     val emoji: String,
@@ -41,7 +42,11 @@ data class PlanResponse(
     @SerializedName("spent_cents") val spentCents: Int = 0,
     @SerializedName("cost_per_like_cents") val costPerLikeCents: Int = 0,
     @SerializedName("is_active") val isActive: Boolean = true,
-    @SerializedName("likes_remaining") val likesRemaining: Int = 0
+    @SerializedName("likes_remaining") val likesRemaining: Int = 0,
+    @SerializedName("available_from") val availableFrom: String? = null,
+    @SerializedName("available_until") val availableUntil: String? = null,
+    val recurring: String? = null,
+    @SerializedName("is_available_now") val isAvailableNow: Boolean = true
 )
 
 data class PlanCreateRequest(
@@ -51,9 +56,13 @@ data class PlanCreateRequest(
     val price: String,
     @SerializedName("plan_type") val planType: String,
     val duration: String,
+    @SerializedName("availability") val availability: String = "Todo el año",
     val category: String,
     val city: String,
-    val emoji: String
+    val emoji: String,
+    @SerializedName("available_from") val availableFrom: String? = null,
+    @SerializedName("available_until") val availableUntil: String? = null,
+    val recurring: String? = null
 )
 
 // === Business ===
@@ -147,6 +156,7 @@ data class FavoritePlan(
     val price: String,
     @SerializedName("plan_type") val planType: String,
     val duration: String,
+    @SerializedName("availability") val availability: String = "Todo el año",
     val category: String,
     val city: String,
     val emoji: String,
@@ -205,4 +215,39 @@ data class WebhookTriggerResponse(
 data class DeletePlanResponse(
     val status: String,
     @SerializedName("refunded_cents") val refundedCents: Int = 0
+)
+
+// === Trip groups (BlaBlaCar-style) ===
+
+data class TripGroupCreateRequest(
+    @SerializedName("plan_id") val planId: Int,
+    val title: String,
+    @SerializedName("meeting_point") val meetingPoint: String? = null,
+    @SerializedName("meet_at") val meetAt: String? = null,
+    val seats: Int = 4,
+    val transport: String = "COCHE",
+    val notes: String? = null
+)
+
+data class TripGroupMember(
+    @SerializedName("user_id") val userId: Int,
+    val username: String,
+    @SerializedName("joined_at") val joinedAt: String
+)
+
+data class TripGroupResponse(
+    val id: Int,
+    @SerializedName("plan_id") val planId: Int,
+    @SerializedName("plan_title") val planTitle: String = "",
+    @SerializedName("owner_id") val ownerId: Int,
+    @SerializedName("owner_username") val ownerUsername: String = "",
+    val title: String,
+    @SerializedName("meeting_point") val meetingPoint: String? = null,
+    @SerializedName("meet_at") val meetAt: String? = null,
+    val seats: Int = 4,
+    val transport: String = "COCHE",
+    val notes: String? = null,
+    @SerializedName("created_at") val createdAt: String,
+    val members: List<TripGroupMember> = emptyList(),
+    @SerializedName("seats_taken") val seatsTaken: Int = 0
 )

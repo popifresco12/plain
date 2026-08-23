@@ -10,8 +10,8 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
-    // For production, use Railway URL
-    private const val BASE_URL = "https://plain-production-9cd6.up.railway.app/"
+    // Backend local via Cloudflare tunnel (para pruebas en Villena)
+    private const val BASE_URL = "https://answers-hitachi-lessons-cancel.trycloudflare.com/"
 
     // Token storage
     private var userToken: String? = null
