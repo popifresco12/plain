@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 from datetime import datetime, date
 import json
@@ -130,8 +130,8 @@ class SponsoredPlanCreate(BaseModel):
     city: str
     emoji: str = "📍"
     tags: list[str] = []
-    budget_cents: int = 500       # Default 5€ budget
-    cost_per_like_cents: int = 10  # Default 0.10€ per like
+    budget_cents: int = Field(500, gt=0)       # Default 5€ budget, must be > 0
+    cost_per_like_cents: int = Field(10, gt=0)  # Default 0.10€ per like, must be > 0
     available_from: Optional[date] = None
     available_until: Optional[date] = None
     recurring: Optional[str] = None
@@ -181,7 +181,7 @@ class BusinessStats(BaseModel):
 
 
 class BudgetTopUp(BaseModel):
-    amount_cents: int
+    amount_cents: int = Field(..., gt=0)
 
 
 # === Favorites ===

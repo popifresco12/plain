@@ -20,7 +20,8 @@ interface ApiService {
     suspend fun getPlans(
         @Query("city") city: String? = null,
         @Query("plan_type") planType: String? = null,
-        @Query("category") category: String? = null
+        @Query("category") category: String? = null,
+        @Query("only_available") onlyAvailable: Boolean? = null
     ): Response<List<PlanResponse>>
 
     @POST("api/plans")

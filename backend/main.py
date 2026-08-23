@@ -377,8 +377,11 @@ def plan_is_available(p: Plan) -> bool:
     if p.available_until and today > p.available_until:
         return False
     if p.recurring:
+        # Mapa fijo (locale-independiente) de weekday() -> código
+        day_map = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+        today_code = day_map[today.weekday()]
         days = [d.strip().upper() for d in p.recurring.split(",") if d.strip()]
-        if days and today.strftime("%a").upper() not in days:
+        if days and today_code not in days:
             return False
     return True
 
@@ -396,7 +399,7 @@ def list_plans(
     Filters by date availability when only_available=True (or always excludes
     plans whose date window has fully ended)."""
     query = db.query(Plan).filter(
-        Plan.is_default == True  # Free seed plans
+        (Plan.is_default == True) | (Plan.created_by != None)  # Free seed + user-created
     )
     if city:
         query = query.filter(Plan.city == city.upper())
@@ -520,6 +523,14 @@ def remove_favorite(
     if not fav:
         raise HTTPException(status_code=404, detail="Favorito no encontrado")
     db.delete(fav)
+
+    # If sponsored: refund the like cost (so like/unlike cycles don't drain budget)
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if plan and plan.is_sponsored:
+        plan.spent_cents = max(0, (plan.spent_cents or 0) - plan.cost_per_like_cents)
+        if plan.spent_cents < plan.budget_cents:
+            plan.is_active = True
+
     db.commit()
     return {"status": "removed"}
 

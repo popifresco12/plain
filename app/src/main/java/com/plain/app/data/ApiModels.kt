@@ -167,7 +167,11 @@ data class FavoritePlan(
     @SerializedName("budget_cents") val budgetCents: Int = 0,
     @SerializedName("spent_cents") val spentCents: Int = 0,
     @SerializedName("cost_per_like_cents") val costPerLikeCents: Int = 0,
-    @SerializedName("is_active") val isActive: Boolean = true
+    @SerializedName("is_active") val isActive: Boolean = true,
+    @SerializedName("available_from") val availableFrom: String? = null,
+    @SerializedName("available_until") val availableUntil: String? = null,
+    val recurring: String? = null,
+    @SerializedName("is_available_now") val isAvailableNow: Boolean = true
 )
 
 data class FavoriteResponse(

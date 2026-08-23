@@ -57,7 +57,7 @@ fun SwipeScreen(
     // Load plans from API
     LaunchedEffect(city) {
         try {
-            val resp = ApiClient.service.getPlans(city = city)
+            val resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
             if (resp.isSuccessful) {
                 plans = resp.body()?.shuffled() ?: emptyList()
             } else {
@@ -245,7 +245,7 @@ fun SwipeScreen(
                             scope.launch {
                                 loading = true
                                 try {
-                                    val resp = ApiClient.service.getPlans(city = city)
+                                    val resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
                                     if (resp.isSuccessful) {
                                         plans = resp.body()?.shuffled() ?: emptyList()
                                         currentIndex = 0

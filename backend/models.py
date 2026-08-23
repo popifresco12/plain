@@ -99,6 +99,10 @@ class Favorite(Base):
     user = relationship("User", back_populates="favorites")
     plan = relationship("Plan")
 
+    __table_args__ = (
+        UniqueConstraint("user_id", "plan_id", name="uq_favorite_user_plan"),
+    )
+
 
 class DislikedTag(Base):
     __tablename__ = "disliked_tags"
