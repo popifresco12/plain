@@ -6,6 +6,8 @@ import android.provider.CalendarContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.RocketLaunch
@@ -19,6 +21,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plain.app.data.FavoritePlan
@@ -26,6 +29,7 @@ import com.plain.app.data.PlanResponse
 import com.plain.app.ui.theme.LikeGreen
 import com.plain.app.ui.theme.NopeRed
 
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PlanCardFromResponse(
     plan: PlanResponse,
@@ -116,13 +120,18 @@ fun PlanCardFromResponse(
                 Text(
                     text = plan.description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Spacer(Modifier.height(16.dp))
 
-                // Tags
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Tags (FlowRow: los chips fluyen sin desbordar)
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
                         Text(plan.category, style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
@@ -151,8 +160,13 @@ fun PlanCardFromResponse(
                             shape = RoundedCornerShape(20.dp),
                             color = MaterialTheme.colorScheme.tertiaryContainer
                         ) {
-                            Text("📅 ${plan.availability}", style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                            Text(
+                                "📅 ${plan.availability}",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
                         }
                     }
                     // Badge de disponibilidad actual: verde si se puede ahora, ámbar si no
