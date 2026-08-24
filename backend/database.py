@@ -10,11 +10,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./plain.db")
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
-else:
-    # Render/PostgreSQL exige SSL
-    if "sslmode" not in DATABASE_URL:
-        sep = "&" if "?" in DATABASE_URL else "?"
-        DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
