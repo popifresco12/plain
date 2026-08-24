@@ -55,6 +55,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="PLAIN API", version="2.1.0")
 
+@app.on_event("startup")
+def seed_on_startup():
+    """Seed automático en producción (uvicorn main:app no pasa por __main__)."""
+    try:
+        seed_plans()
+    except Exception as e:
+        print(f"⚠️ seed_plans falló (no crítico): {e}")
+
 # Rate limiting — auth endpoints son bruteforceables
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -147,7 +155,13 @@ def seed_plans():
         if count == 0:
             for p in SEED_PLANS:
                 tags = p.pop("tags", [])
-                plan = Plan(**p, tags=json.dumps(tags), is_default=True)
+                data = dict(p)
+                # parsear fechas a date objects (PostgreSQL exige Date, no str)
+                if data.get("available_from"):
+                    data["available_from"] = date.fromisoformat(str(data["available_from"]))
+                if data.get("available_until"):
+                    data["available_until"] = date.fromisoformat(str(data["available_until"]))
+                plan = Plan(**data, tags=json.dumps(tags), is_default=True)
                 db.add(plan)
             db.commit()
             print(f"✅ Seeded {len(SEED_PLANS)} default plans with tags")
