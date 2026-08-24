@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.plain.app.data.ApiClient
 import com.plain.app.data.PlanResponse
+import com.plain.app.data.TripGroupCreateRequest
+import com.plain.app.data.TripGroupResponse
 import com.plain.app.ui.components.PlanCardFromResponse
 import com.plain.app.ui.components.addToCalendar
 import com.plain.app.ui.components.sharePlan
@@ -415,6 +417,26 @@ fun SwipeScreen(
 
     // Info dialog
     showInfoDialog?.let { plan ->
+        var groups by remember { mutableStateOf<List<TripGroupResponse>>(emptyList()) }
+        var groupsLoading by remember { mutableStateOf(false) }
+        var groupMsg by remember { mutableStateOf<String?>(null) }
+
+        fun loadGroups() {
+            groupsLoading = true
+            groupMsg = null
+            scope.launch {
+                try {
+                    val resp = ApiClient.service.getPlanGroups(plan.id)
+                    if (resp.isSuccessful) {
+                        groups = resp.body() ?: emptyList()
+                    }
+                } catch (_: Exception) {}
+                groupsLoading = false
+            }
+        }
+
+        LaunchedEffect(plan.id) { loadGroups() }
+
         AlertDialog(
             onDismissRequest = { showInfoDialog = null },
             title = { Text("${plan.emoji} ${plan.title}", style = MaterialTheme.typography.headlineMedium) },
@@ -435,6 +457,85 @@ fun SwipeScreen(
                     }
 
                     Spacer(Modifier.height(20.dp))
+
+                    // --- Trip groups (BlaBlaCar-style) ---
+                    Text("🚗 Quedadas para ir juntos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+
+                    if (groupsLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    } else if (groups.isEmpty()) {
+                        Text("Todavía no hay quedadas. ¡Crea la primera!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        groups.forEach { g ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(g.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            "${g.ownerUsername} · ${g.transport.lowercase()} · ${g.seatsTaken}/${g.seats} plazas" +
+                                                (g.meetingPoint?.let { " · 📍 $it" } ?: ""),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (g.seatsTaken < g.seats) {
+                                        TextButton(onClick = {
+                                            scope.launch {
+                                                val resp = ApiClient.service.joinGroup(g.id)
+                                                groupMsg = if (resp.isSuccessful) "✅ Te has unido a \"${g.title}\"" else "Error al unirse (${resp.code()})"
+                                                loadGroups()
+                                            }
+                                        }) {
+                                            Text("Unirse", color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    } else {
+                                        Text("Completo", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    groupMsg?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                val resp = ApiClient.service.createGroup(
+                                    plan.id,
+                                    TripGroupCreateRequest(
+                                        planId = plan.id,
+                                        title = "Quedada para ${plan.title} 🚗",
+                                        meetingPoint = plan.location,
+                                        seats = 4,
+                                        transport = "COCHE",
+                                        notes = "¿Vamos juntos? Crea la quedada y compártela."
+                                    )
+                                )
+                                groupMsg = if (resp.isSuccessful) "✅ Quedada creada" else "Error al crear (${resp.code()})"
+                                loadGroups()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("+ Crear quedada", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    Spacer(Modifier.height(16.dp))
 
                     // Action buttons
                     val context = LocalContext.current
