@@ -37,10 +37,48 @@ fun CreatePlanScreen(
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    var createAttempt by remember { mutableIntStateOf(0) }
+
+    // Crear el plan desde un LaunchedEffect (no desde scope.launch en onClick):
+    // si la composición sale, la corrutina se cancela limpiamente y nunca escribe
+    // en estado muerto (evita "coroutine scope left the composition")
+    LaunchedEffect(createAttempt) {
+        if (createAttempt > 0) {
+            saving = true
+            try {
+                val resp = ApiClient.service.createPlan(
+                    PlanCreateRequest(
+                        title = title.trim(),
+                        description = description.trim(),
+                        location = location.trim(),
+                        price = price.trim().ifBlank { "0€" },
+                        planType = "AMBOS",
+                        duration = duration.trim().ifBlank { "2h" },
+                        availability = availability,
+                        category = category.trim().ifBlank { "Ocio" },
+                        city = city,
+                        emoji = "📍",
+                        availableFrom = availableFrom.trim().ifBlank { null },
+                        availableUntil = availableUntil.trim().ifBlank { null },
+                        recurring = recurring.trim().ifBlank { null }
+                    )
+                )
+                if (resp.isSuccessful) {
+                    success = true
+                } else {
+                    error = "Error al crear (${resp.code()})"
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e // cancelación limpia, no es un error
+            } catch (e: Exception) {
+                error = "Error de conexión: ${e.localizedMessage}"
+            } finally {
+                saving = false
+            }
+        }
+    }
 
     // Navegar SOLO cuando success se pone a true y la corrutina ya terminó
-    // (evita "coroutine scope left the composition" al navegar dentro del launch)
     LaunchedEffect(success) {
         if (success) {
             onCreated()
@@ -249,40 +287,9 @@ fun CreatePlanScreen(
                         error = "Completa título, descripción y lugar"
                         return@Button
                     }
-                    saving = true
-                    error = null
-                    scope.launch {
-                        try {
-                            val resp = ApiClient.service.createPlan(
-                                PlanCreateRequest(
-                                    title = title.trim(),
-                                    description = description.trim(),
-                                    location = location.trim(),
-                                    price = price.trim().ifBlank { "0€" },
-                                    planType = "AMBOS",
-                                    duration = duration.trim().ifBlank { "2h" },
-                                    availability = availability,
-                                    category = category.trim().ifBlank { "Ocio" },
-                                    city = city,
-                                    emoji = "📍",
-                                    availableFrom = availableFrom.trim().ifBlank { null },
-                                    availableUntil = availableUntil.trim().ifBlank { null },
-                                    recurring = recurring.trim().ifBlank { null }
-                                )
-                            )
-                            if (resp.isSuccessful) {
-                                success = true
-                                title = ""; description = ""; location = ""
-                            } else {
-                                error = "Error al crear (${resp.code()})"
-                            }
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e // no tratar la cancelación como error
-                        } catch (e: Exception) {
-                            error = "Error de conexión: ${e.localizedMessage}"
-                        } finally {
-                            saving = false
-                        }
+                    if (!saving) {
+                        error = null
+                        createAttempt++
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
