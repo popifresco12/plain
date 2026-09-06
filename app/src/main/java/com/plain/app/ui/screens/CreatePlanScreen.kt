@@ -64,17 +64,21 @@ fun CreatePlanScreen(
                     )
                 )
                 if (resp.isSuccessful) {
+                    // Marcar success como ÚLTIMA acción: navegar dispara la salida
+                    // de composición, y cualquier write posterior (p.ej. saving=false
+                    // en finally) lanzaría "coroutine scope left the composition".
                     success = true
+                    return@LaunchedEffect
                 } else {
                     error = "Error al crear (${resp.code()})"
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e // cancelación limpia, no es un error
+                // Cancelación limpia (p.ej. el usuario navegó atrás): no tocar estado
+                return@LaunchedEffect
             } catch (e: Exception) {
                 error = "Error de conexión: ${e.localizedMessage}"
-            } finally {
-                saving = false
             }
+            saving = false
         }
     }
 
