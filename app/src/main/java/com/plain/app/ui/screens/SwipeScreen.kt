@@ -60,6 +60,37 @@ fun SwipeScreen(
     var refreshKey by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
+    // Estado de grupos: vive al nivel del SwipeScreen (no del diálogo) para
+    // evitar "coroutine scope left the composition" al cerrar el diálogo
+    var groups by remember { mutableStateOf<List<TripGroupResponse>>(emptyList()) }
+    var groupsLoading by remember { mutableStateOf(false) }
+    var groupMsg by remember { mutableStateOf<String?>(null) }
+    var currentGroupsPlan by remember { mutableStateOf<Int?>(null) }
+
+    fun loadGroups(planId: Int) {
+        groupsLoading = true
+        groupMsg = null
+        scope.launch {
+            try {
+                val resp = ApiClient.service.getPlanGroups(planId)
+                if (resp.isSuccessful) {
+                    groups = resp.body() ?: emptyList()
+                }
+            } catch (_: Exception) {}
+            groupsLoading = false
+        }
+    }
+
+    // Cargar grupos cuando se abre el diálogo de info de un plan
+    LaunchedEffect(showInfoDialog?.id) {
+        val pid = showInfoDialog?.id
+        if (pid != null) {
+            currentGroupsPlan = pid
+            groups = emptyList()
+            loadGroups(pid)
+        }
+    }
+
     // Load plans from API (recarga al cambiar ciudad O al volver de crear plan)
     LaunchedEffect(city, refreshKey, planCreated) {
         if (planCreated) refreshKey++
@@ -332,7 +363,12 @@ fun SwipeScreen(
                                     }
                                 }
 
-                                currentIndex++
+                                // Eliminar el plan swipado de la lista (no vuelve a salir
+                                // aunque recargues la pantalla en esta sesión)
+                                if (currentPlan != null) {
+                                    plans = plans.filter { it.id != currentPlan.id }
+                                    currentIndex = 0
+                                }
                                 offsetX = 0f
                                 isAnimating = false
                             }
@@ -355,7 +391,8 @@ fun SwipeScreen(
                                         if (resp.isSuccessful) {
                                             // Also save as favorite
                                             try { ApiClient.service.addFavorite(plan.id) } catch (_: Exception) {}
-                                            currentIndex++
+                                            plans = plans.filter { it.id != plan.id }
+                                            currentIndex = 0
                                             offsetX = 0f
                                         }
                                     } catch (_: Exception) {}
@@ -417,26 +454,6 @@ fun SwipeScreen(
 
     // Info dialog
     showInfoDialog?.let { plan ->
-        var groups by remember { mutableStateOf<List<TripGroupResponse>>(emptyList()) }
-        var groupsLoading by remember { mutableStateOf(false) }
-        var groupMsg by remember { mutableStateOf<String?>(null) }
-
-        fun loadGroups() {
-            groupsLoading = true
-            groupMsg = null
-            scope.launch {
-                try {
-                    val resp = ApiClient.service.getPlanGroups(plan.id)
-                    if (resp.isSuccessful) {
-                        groups = resp.body() ?: emptyList()
-                    }
-                } catch (_: Exception) {}
-                groupsLoading = false
-            }
-        }
-
-        LaunchedEffect(plan.id) { loadGroups() }
-
         AlertDialog(
             onDismissRequest = { showInfoDialog = null },
             title = { Text("${plan.emoji} ${plan.title}", style = MaterialTheme.typography.headlineMedium) },
@@ -491,7 +508,7 @@ fun SwipeScreen(
                                             scope.launch {
                                                 val resp = ApiClient.service.joinGroup(g.id)
                                                 groupMsg = if (resp.isSuccessful) "✅ Te has unido a \"${g.title}\"" else "Error al unirse (${resp.code()})"
-                                                loadGroups()
+                                                loadGroups(plan.id)
                                             }
                                         }) {
                                             Text("Unirse", color = MaterialTheme.colorScheme.primary)
@@ -526,7 +543,7 @@ fun SwipeScreen(
                                     )
                                 )
                                 groupMsg = if (resp.isSuccessful) "✅ Quedada creada" else "Error al crear (${resp.code()})"
-                                loadGroups()
+                                loadGroups(plan.id)
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
