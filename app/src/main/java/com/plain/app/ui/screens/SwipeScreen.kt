@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.plain.app.data.ApiClient
+import android.content.Context
 import com.plain.app.data.PlanResponse
 import com.plain.app.data.TripGroupCreateRequest
 import com.plain.app.data.TripGroupResponse
@@ -91,13 +92,29 @@ fun SwipeScreen(
         }
     }
 
+    // Persistencia de planes ya vistos (no vuelven a salir aunque recargues)
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("plain_swipes", Context.MODE_PRIVATE) }
+
+    fun markSwiped(planId: Int) {
+        val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        seen.add(planId.toString())
+        prefs.edit().putStringSet("seen_plan_ids", seen).apply()
+    }
+
     // Load plans from API (recarga al cambiar ciudad O al volver de crear plan)
     LaunchedEffect(city, refreshKey, planCreated) {
         if (planCreated) refreshKey++
         try {
             val resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
             if (resp.isSuccessful) {
-                plans = resp.body()?.shuffled() ?: emptyList()
+                // Filtrar los que ya se swiparon en esta ciudad (persistente)
+                val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf()) ?: mutableSetOf()
+                val fresh = resp.body()?.filter { it.id.toString() !in seen }?.shuffled() ?: emptyList()
+                plans = fresh
+                if (fresh.isEmpty()) {
+                    error = "Ya has visto todos los planes de esta ciudad. ¡Vuelve mañana para más!"
+                }
             } else {
                 error = "Error al cargar planes (${resp.code()})"
             }
@@ -366,6 +383,7 @@ fun SwipeScreen(
                                 // Eliminar el plan swipado de la lista (no vuelve a salir
                                 // aunque recargues la pantalla en esta sesión)
                                 if (currentPlan != null) {
+                                    markSwiped(currentPlan.id)
                                     plans = plans.filter { it.id != currentPlan.id }
                                     currentIndex = 0
                                 }
@@ -391,6 +409,7 @@ fun SwipeScreen(
                                         if (resp.isSuccessful) {
                                             // Also save as favorite
                                             try { ApiClient.service.addFavorite(plan.id) } catch (_: Exception) {}
+                                            markSwiped(plan.id)
                                             plans = plans.filter { it.id != plan.id }
                                             currentIndex = 0
                                             offsetX = 0f
@@ -506,8 +525,14 @@ fun SwipeScreen(
                                     if (g.seatsTaken < g.seats) {
                                         TextButton(onClick = {
                                             scope.launch {
-                                                val resp = ApiClient.service.joinGroup(g.id)
-                                                groupMsg = if (resp.isSuccessful) "✅ Te has unido a \"${g.title}\"" else "Error al unirse (${resp.code()})"
+                                                try {
+                                                    val resp = ApiClient.service.joinGroup(g.id)
+                                                    groupMsg = if (resp.isSuccessful) "✅ Te has unido a \"${g.title}\"" else "Error al unirse (${resp.code()})"
+                                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                                    throw e
+                                                } catch (_: Exception) {
+                                                    groupMsg = "Error de conexión al unirse"
+                                                }
                                                 loadGroups(plan.id)
                                             }
                                         }) {
@@ -531,18 +556,24 @@ fun SwipeScreen(
                     OutlinedButton(
                         onClick = {
                             scope.launch {
-                                val resp = ApiClient.service.createGroup(
-                                    plan.id,
-                                    TripGroupCreateRequest(
-                                        planId = plan.id,
-                                        title = "Quedada para ${plan.title} 🚗",
-                                        meetingPoint = plan.location,
-                                        seats = 4,
-                                        transport = "COCHE",
-                                        notes = "¿Vamos juntos? Crea la quedada y compártela."
+                                try {
+                                    val resp = ApiClient.service.createGroup(
+                                        plan.id,
+                                        TripGroupCreateRequest(
+                                            planId = plan.id,
+                                            title = "Quedada para ${plan.title} 🚗",
+                                            meetingPoint = plan.location,
+                                            seats = 4,
+                                            transport = "COCHE",
+                                            notes = "¿Vamos juntos? Crea la quedada y compártela."
+                                        )
                                     )
-                                )
-                                groupMsg = if (resp.isSuccessful) "✅ Quedada creada" else "Error al crear (${resp.code()})"
+                                    groupMsg = if (resp.isSuccessful) "✅ Quedada creada" else "Error al crear (${resp.code()})"
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (_: Exception) {
+                                    groupMsg = "Error de conexión al crear la quedada"
+                                }
                                 loadGroups(plan.id)
                             }
                         },

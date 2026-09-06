@@ -39,6 +39,14 @@ fun CreatePlanScreen(
     var success by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    // Navegar SOLO cuando success se pone a true y la corrutina ya terminó
+    // (evita "coroutine scope left the composition" al navegar dentro del launch)
+    LaunchedEffect(success) {
+        if (success) {
+            onCreated()
+        }
+    }
+
     val categories = listOf("Ocio", "Cultura", "Gastronomía", "Naturaleza", "Compras", "Música", "Deporte")
 
     val cityLabel = when (city) {
@@ -265,10 +273,11 @@ fun CreatePlanScreen(
                             if (resp.isSuccessful) {
                                 success = true
                                 title = ""; description = ""; location = ""
-                                onCreated()
                             } else {
                                 error = "Error al crear (${resp.code()})"
                             }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e // no tratar la cancelación como error
                         } catch (e: Exception) {
                             error = "Error de conexión: ${e.localizedMessage}"
                         } finally {
