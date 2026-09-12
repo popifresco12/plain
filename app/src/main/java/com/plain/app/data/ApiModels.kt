@@ -255,3 +255,22 @@ data class TripGroupResponse(
     val members: List<TripGroupMember> = emptyList(),
     @SerializedName("seats_taken") val seatsTaken: Int = 0
 )
+// --- Chat de quedadas ---
+
+data class GroupMessageRequest(
+    val text: String
+)
+
+data class GroupMessageResponse(
+    val id: Int,
+    @SerializedName("group_id") val groupId: Int,
+    @SerializedName("user_id") val userId: Int,
+    val username: String,
+    val text: String,
+    @SerializedName("created_at") val createdAt: String
+)
+
+data class BootstrapResult(
+    val city: String,
+    val created: Int = 0
+)

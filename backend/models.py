@@ -167,3 +167,17 @@ class TripGroupMember(Base):
     __table_args__ = (
         UniqueConstraint("group_id", "user_id", name="uq_group_user"),
     )
+
+
+class GroupMessage(Base):
+    """Mensajes del chat de una quedada grupal."""
+    __tablename__ = "group_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("trip_groups.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    group = relationship("TripGroup")
+    user = relationship("User")

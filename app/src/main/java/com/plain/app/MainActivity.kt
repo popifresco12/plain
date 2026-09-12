@@ -17,6 +17,7 @@ import com.plain.app.ui.screens.BiometricSettingsScreen
 import com.plain.app.ui.screens.BiometricUnlockScreen
 import com.plain.app.ui.screens.CitySelectionScreen
 import com.plain.app.ui.screens.CreatePlanScreen
+import com.plain.app.ui.screens.GroupChatScreen
 import com.plain.app.ui.screens.FavoritesScreen
 import com.plain.app.ui.screens.LoginScreen
 import com.plain.app.ui.screens.RegisterScreen
@@ -125,6 +126,9 @@ class MainActivity : ComponentActivity() {
                                     launchSingleTop = true
                                 }
                             },
+                            onOpenChat = { groupId, groupTitle ->
+                                navController.navigate("group_chat/$groupId/${android.net.Uri.encode(groupTitle)}")
+                            },
                             planCreated = planCreated
                         )
                     }
@@ -140,6 +144,23 @@ class MainActivity : ComponentActivity() {
                                     ?.set("plan_created", true)
                                 navController.popBackStack()
                             }
+                        )
+                    }
+
+                    // Chat de una quedada grupal
+                    composable(
+                        "group_chat/{groupId}/{groupTitle}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("groupId") { type = androidx.navigation.NavType.IntType },
+                            androidx.navigation.navArgument("groupTitle") { type = androidx.navigation.NavType.StringType }
+                        )
+                    ) { backStackEntry ->
+                        val groupId = backStackEntry.arguments?.getInt("groupId") ?: 0
+                        val groupTitle = backStackEntry.arguments?.getString("groupTitle") ?: "Quedada"
+                        GroupChatScreen(
+                            groupId = groupId,
+                            groupTitle = groupTitle,
+                            onBack = { navController.popBackStack() }
                         )
                     }
 

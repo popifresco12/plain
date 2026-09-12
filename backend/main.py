@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -25,8 +26,9 @@ from auth import (
     verify_password,
 )
 from database import Base, SessionLocal, engine, get_db
-from models import Business, DislikedTag, Favorite, Plan, TripGroup, TripGroupMember, User, WebhookConfig
+from models import Business, DislikedTag, Favorite, GroupMessage, Plan, TripGroup, TripGroupMember, User, WebhookConfig
 from schemas import (
+    BootstrapResult,
     BudgetTopUp,
     BusinessLogin,
     BusinessRegister,
@@ -35,11 +37,15 @@ from schemas import (
     BusinessTokenResponse,
     DislikeTagsRequest,
     FavoriteResponse,
+    GroupMessageCreate,
+    GroupMessageOut,
     PlanCreate,
     PlanResponse,
     SponsoredPlanCreate,
     SponsoredPlanResponse,
     TokenResponse,
+    TripGroupCreate,
+    TripGroupResponse,
     UserLogin,
     UserRegister,
     UserResponse,
@@ -860,6 +866,125 @@ def leave_group(
     db.delete(member)
     db.commit()
     return {"status": "ok"}
+
+
+# --- CHAT DE QUEDADAS ---
+
+def _require_membership(db: Session, group_id: int, user: User) -> TripGroup:
+    """Comprueba que el grupo existe y el usuario es miembro (o dueño)."""
+    group = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Quedada no encontrada")
+    is_member = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id
+    ).first() is not None
+    if not is_member and group.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Únete a la quedada para ver el chat")
+    return group
+
+
+@app.get("/api/groups/{group_id}/messages", response_model=list[GroupMessageOut])
+def get_group_messages(
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Mensajes de la quedada (solo miembros)."""
+    _require_membership(db, group_id, user)
+    rows = (
+        db.query(GroupMessage, User.username)
+        .join(User, GroupMessage.user_id == User.id)
+        .filter(GroupMessage.group_id == group_id)
+        .order_by(GroupMessage.created_at.asc())
+        .limit(200)
+        .all()
+    )
+    return [
+        GroupMessageOut(
+            id=m.id, group_id=m.group_id, user_id=m.user_id,
+            username=uname, text=m.text, created_at=m.created_at,
+        )
+        for m, uname in rows
+    ]
+
+
+@app.post("/api/groups/{group_id}/messages", response_model=GroupMessageOut)
+def post_group_message(
+    group_id: int,
+    data: GroupMessageCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Envía un mensaje a la quedada (solo miembros)."""
+    _require_membership(db, group_id, user)
+    msg = GroupMessage(group_id=group_id, user_id=user.id, text=data.text.strip())
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    return GroupMessageOut(
+        id=msg.id, group_id=msg.group_id, user_id=msg.user_id,
+        username=user.username, text=msg.text, created_at=msg.created_at,
+    )
+
+
+# --- CIUDADES DINÁMICAS (bootstrap) ---
+
+# Plantillas genéricas por categoría: se usan cuando alguien pide planes
+# de una ciudad que no está en el seed. Se personalizan con el nombre de la ciudad.
+CITY_PLAN_TEMPLATES = [
+    {"title": "Café con encanto en {city}", "description": "Un café tranquilo para charlar con buena compañía y algo dulce.", "category": "Gastronomía", "plan_type": "AMBOS", "duration": "1h 30min", "price": "3-6€", "emoji": "☕", "tags": ["cafe", "charla", "barato"]},
+    {"title": "Paseo por el centro de {city}", "description": "Caminar sin prisa por las calles del casco histórico, viendo escaparates y plazas.", "category": "Ocio", "plan_type": "AMBOS", "duration": "2h", "price": "0€", "emoji": "🚶", "tags": ["paseo", "gratis", "casco"]},
+    {"title": "Mirador de {city} al atardecer", "description": "El mejor punto para ver la puesta de sol y sacar fotos. Lleva chaqueta.", "category": "Naturaleza", "plan_type": "PAREJA", "duration": "1h", "price": "0€", "emoji": "🌅", "tags": ["atardecer", "vistas", "gratis", "romantico"]},
+    {"title": "Museo principal de {city}", "description": "La colección más interesante de la ciudad. Entrada económica y visita guiada opcional.", "category": "Cultura", "plan_type": "SOLO", "duration": "2h", "price": "3-8€", "emoji": "🏛️", "tags": ["museo", "cultura", "barato"]},
+    {"title": "Mercado local de {city}", "description": "Productos frescos, ambiente de barrio y buena comida al paso.", "category": "Compras", "plan_type": "AMBOS", "duration": "1h", "price": "5-15€", "emoji": "🧺", "tags": ["mercado", "comida", "barrio"]},
+    {"title": "Cervecita y tapas en {city}", "description": "Ruta corta de bares con tapas. Ideal para hacer nuevos amigos.", "category": "Gastronomía", "plan_type": "AMBOS", "duration": "3h", "price": "10-20€", "emoji": "🍺", "tags": ["tapas", "cerveza", "social"]},
+    {"title": "Parque principal de {city}", "description": "Zona verde para correr, leer o simplemente tumbarse al sol.", "category": "Deporte", "plan_type": "AMBOS", "duration": "1h", "price": "0€", "emoji": "🌳", "tags": ["parque", "deporte", "gratis", "aire libre"]},
+    {"title": "Cine o teatro en {city}", "description": "Sesión de tarde con la cartelera local. Buena opción para días de lluvia.", "category": "Cultura", "plan_type": "PAREJA", "duration": "2h 30min", "price": "6-12€", "emoji": "🎬", "tags": ["cine", "teatro", "cultura", "lluvia"]},
+    {"title": "Quedada para conocer gente en {city}", "description": "Encuentro informal de gente nueva para tomar algo y hacer plan juntos.", "category": "Ocio", "plan_type": "AMBOS", "duration": "2h", "price": "5-10€", "emoji": "👋", "tags": ["social", "conocer gente", "amigos"]},
+    {"title": "Excursión cercana a {city}", "description": "Ruta corta de senderismo a un mirador o pueblo cercano. Se sale por la mañana.", "category": "Naturaleza", "plan_type": "AMBOS", "duration": "Todo el día", "price": "5-10€", "emoji": "🥾", "tags": ["senderismo", "excursion", "naturaleza"]},
+]
+
+
+@app.post("/api/cities/{city}/bootstrap", response_model=BootstrapResult)
+def bootstrap_city(
+    city: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Si una ciudad no tiene planes, genera planes locales al instante.
+
+    Idempotente: si la ciudad YA tiene planes, no crea nada (devuelve
+    created=0) para no duplicar contenido.
+    """
+    city_norm = city.strip().upper()
+    if len(city_norm) < 2 or len(city_norm) > 60:
+        raise HTTPException(status_code=400, detail="Ciudad no válida")
+
+    existing = db.query(Plan).filter(
+        func.upper(Plan.city) == city_norm, Plan.is_active == True
+    ).count()
+    if existing > 0:
+        return BootstrapResult(city=city_norm, created=0, plans=[])
+
+    pretty = city.strip().title()
+    created_plans = []
+    for tmpl in CITY_PLAN_TEMPLATES:
+        p = dict(tmpl)
+        p["title"] = p["title"].format(city=pretty)
+        p["description"] = p["description"].format(city=pretty)
+        p["location"] = f"{pretty} (centro)"
+        p["city"] = city_norm
+        tags = p.pop("tags", [])
+        plan = Plan(
+            **p,
+            tags=json.dumps(tags),
+            is_default=False,
+            created_by=user.id,
+        )
+        db.add(plan)
+        created_plans.append(p)
+    db.commit()
+    return BootstrapResult(city=city_norm, created=len(created_plans), plans=created_plans)
 
 
 # --- Start ---

@@ -3,6 +3,7 @@ package com.plain.app.ui.components
 import android.content.Context
 import android.content.Intent
 import android.provider.CalendarContract
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,13 +47,25 @@ fun PlanCardFromResponse(
     val rotation = offsetX * 0.08f
     val scale = 1f - (kotlin.math.abs(offsetX) / 2000f).coerceAtMost(0.15f)
 
+    // Progreso del gesto 0..1 (para intensidad del borde y del sello)
+    val dragProgress = (kotlin.math.abs(offsetX) / 420f).coerceIn(0f, 1f)
+    val accent = if (offsetX > 0) LikeGreen else NopeRed
+
     Card(
         modifier = modifier
             .offset(x = offsetX.dp)
             .rotate(rotation)
             .scale(scale),
         shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        border = if (dragProgress > 0.02f) {
+            BorderStroke(
+                width = (2f + dragProgress * 3f).dp,
+                color = accent.copy(alpha = dragProgress * 0.95f)
+            )
+        } else null,
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 8.dp + (dragProgress * 10f).dp
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
@@ -75,14 +89,20 @@ fun PlanCardFromResponse(
                     Text(text = plan.emoji, fontSize = 64.sp)
                 }
 
-                if (kotlin.math.abs(offsetX) > 50) {
+                // Sello ME GUSTA / NO: aparece y se intensifica con el arrastre
+                if (dragProgress > 0.05f) {
                     Text(
                         text = if (offsetX > 0) "ME GUSTA" else "NO",
                         modifier = Modifier
                             .align(if (offsetX > 0) Alignment.TopStart else Alignment.TopEnd)
                             .padding(20.dp)
+                            .graphicsLayer {
+                                alpha = dragProgress
+                                scaleX = 0.7f + dragProgress * 0.4f
+                                scaleY = 0.7f + dragProgress * 0.4f
+                            }
                             .background(
-                                color = if (offsetX > 0) LikeGreen else NopeRed,
+                                color = accent.copy(alpha = 0.35f + dragProgress * 0.65f),
                                 shape = RoundedCornerShape(8.dp)
                             )
                             .padding(horizontal = 16.dp, vertical = 8.dp)

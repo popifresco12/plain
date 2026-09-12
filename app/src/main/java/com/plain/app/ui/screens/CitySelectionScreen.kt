@@ -135,6 +135,42 @@ fun CitySelectionScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Otra ciudad: escribir cualquier ciudad. Si no tiene planes,
+            // PLΛIN genera planes locales automáticamente.
+            var customCity by remember { mutableStateOf("") }
+            Text(
+                text = "¿No está tu ciudad?",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.Start)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            OutlinedTextField(
+                value = customCity,
+                onValueChange = { if (it.length <= 40) customCity = it },
+                placeholder = { Text("Escribe tu ciudad…") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                trailingIcon = {
+                    if (customCity.isNotBlank()) {
+                        IconButton(onClick = {
+                            onCitySelected(customCity.trim().uppercase())
+                        }) {
+                            Text("→", fontSize = 20.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Si aún no hay planes, los creamos al momento ✨",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(

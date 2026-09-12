@@ -1,8 +1,13 @@
 package com.plain.app.ui.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,6 +53,7 @@ fun SwipeScreen(
     onSettings: () -> Unit,
     onFavorites: () -> Unit,
     onCreatePlan: () -> Unit,
+    onOpenChat: (Int, String) -> Unit = { _, _ -> },
     planCreated: Boolean = false
 ) {
     var plans by remember { mutableStateOf<List<PlanResponse>>(emptyList()) }
@@ -106,15 +113,32 @@ fun SwipeScreen(
     LaunchedEffect(city, refreshKey, planCreated) {
         if (planCreated) refreshKey++
         try {
-            val resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
+            var resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
+
+            // Si la ciudad no tiene planes (ciudad nueva), generar planes locales
+            // automáticamente (backend idempotente: no duplica si ya existen)
+            if (resp.isSuccessful && (resp.body()?.isEmpty() == true)) {
+                error = "Ciudad nueva: generando planes de ${city.lowercase().replaceFirstChar { it.uppercase() }}…"
+                try {
+                    val boot = ApiClient.service.bootstrapCity(city)
+                    val created = boot.body()?.created ?: 0
+                    if (created > 0) {
+                        feedbackText = "✨ ¡Hemos creado $created planes en ${city.lowercase().replaceFirstChar { it.uppercase() }}!"
+                    }
+                    resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
+                } catch (_: Exception) {
+                    // Si falla el bootstrap, seguimos con la lista vacía
+                }
+            }
+
             if (resp.isSuccessful) {
                 // Filtrar los que ya se swiparon en esta ciudad (persistente)
                 val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf()) ?: mutableSetOf()
                 val fresh = resp.body()?.filter { it.id.toString() !in seen }?.shuffled() ?: emptyList()
                 plans = fresh
-                if (fresh.isEmpty()) {
-                    error = "Ya has visto todos los planes de esta ciudad. ¡Vuelve mañana para más!"
-                }
+                error = if (fresh.isEmpty()) {
+                    "Ya has visto todos los planes de esta ciudad. ¡Vuelve mañana para más!"
+                } else null
             } else {
                 error = "Error al cargar planes (${resp.code()})"
             }
@@ -140,14 +164,26 @@ fun SwipeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = when (city) {
-                            "BARCELONA" -> "🌊 Barcelona"
-                            "ALICANTE" -> "🌴 Alicante"
-                            else -> "🏰 Villena"
-                        },
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text(
+                            text = when (city) {
+                                "BARCELONA" -> "🌊 Barcelona"
+                                "ALICANTE" -> "🌴 Alicante"
+                                "MADRID" -> "🐻 Madrid"
+                                "VALENCIA" -> "🥘 Valencia"
+                                "SEVILLA" -> "💃 Sevilla"
+                                else -> "🏰 ${city.lowercase().replaceFirstChar { it.uppercase() }}"
+                            },
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (plans.isNotEmpty()) {
+                            Text(
+                                text = "${plans.size} plan${if (plans.size == 1) "" else "es"} por descubrir",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -183,6 +219,14 @@ fun SwipeScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Botón NO con feedback de pulsación
+                    val nopeInteraction = remember { MutableInteractionSource() }
+                    val nopePressed by nopeInteraction.collectIsPressedAsState()
+                    val nopeScale by animateFloatAsState(
+                        targetValue = if (nopePressed) 0.86f else 1f,
+                        animationSpec = tween(120, easing = FastOutSlowInEasing),
+                        label = "nopeScale"
+                    )
                     FilledTonalButton(
                         onClick = {
                             if (topCard != null && !isAnimating) {
@@ -190,7 +234,11 @@ fun SwipeScreen(
                                 isAnimating = true
                             }
                         },
-                        modifier = Modifier.size(64.dp),
+                        interactionSource = nopeInteraction,
+                        modifier = Modifier.size(64.dp).graphicsLayer {
+                            scaleX = nopeScale
+                            scaleY = nopeScale
+                        },
                         shape = RoundedCornerShape(32.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = NopeRed.copy(alpha = 0.15f)
@@ -199,6 +247,14 @@ fun SwipeScreen(
                         Icon(Icons.Default.Close, contentDescription = "No", tint = NopeRed, modifier = Modifier.size(28.dp))
                     }
 
+                    // Botón ME GUSTA con feedback de pulsación
+                    val likeInteraction = remember { MutableInteractionSource() }
+                    val likePressed by likeInteraction.collectIsPressedAsState()
+                    val likeScale by animateFloatAsState(
+                        targetValue = if (likePressed) 0.86f else 1f,
+                        animationSpec = tween(120, easing = FastOutSlowInEasing),
+                        label = "likeScale"
+                    )
                     FilledTonalButton(
                         onClick = {
                             if (topCard != null && !isAnimating) {
@@ -206,7 +262,11 @@ fun SwipeScreen(
                                 isAnimating = true
                             }
                         },
-                        modifier = Modifier.size(72.dp),
+                        interactionSource = likeInteraction,
+                        modifier = Modifier.size(72.dp).graphicsLayer {
+                            scaleX = likeScale
+                            scaleY = likeScale
+                        },
                         shape = RoundedCornerShape(36.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = LikeGreen.copy(alpha = 0.15f)
@@ -291,13 +351,29 @@ fun SwipeScreen(
                     }
                 }
                 error != null -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(32.dp)
+                    ) {
                         Text("⚠️", fontSize = 48.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(error!!, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { onBack() }) {
-                            Text("Volver")
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            error!!,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(onClick = {
+                                loading = true
+                                error = null
+                                refreshKey++
+                            }) {
+                                Text("Reintentar")
+                            }
+                            OutlinedButton(onClick = { onSettings() }) {
+                                Text("Cambiar ciudad")
+                            }
                         }
                     }
                 }
@@ -338,10 +414,16 @@ fun SwipeScreen(
                             )
                         }
 
+                        // Vuelo de salida: tween rápido con easing (más "snappy"
+                        // que el spring por defecto, que flotaba demasiado)
                         val resultOffsetX by animateFloatAsState(
                             targetValue = if (isAnimating && offsetX > 0) 2000f
                             else if (isAnimating && offsetX < 0) -2000f
                             else offsetX,
+                            animationSpec = tween(
+                                durationMillis = if (isAnimating) 260 else 180,
+                                easing = FastOutSlowInEasing
+                            ),
                             label = "swipe"
                         )
 
@@ -392,6 +474,19 @@ fun SwipeScreen(
                             }
                         }
 
+                        // Entrada de la nueva tarjeta: aparece creciendo suavemente
+                        // (da sensación de fluidez al pasar de un plan a otro)
+                        val cardEntrance = remember { Animatable(1f) }
+                        LaunchedEffect(topCard?.id) {
+                            if (topCard != null) {
+                                cardEntrance.snapTo(0.9f)
+                                cardEntrance.animateTo(
+                                    1f,
+                                    tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                                )
+                            }
+                        }
+
                         PlanCardFromResponse(
                             plan = topCard,
                             offsetX = resultOffsetX,
@@ -421,6 +516,11 @@ fun SwipeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp)
+                                .graphicsLayer {
+                                    scaleX = cardEntrance.value
+                                    scaleY = cardEntrance.value
+                                    alpha = 0.55f + cardEntrance.value * 0.45f
+                                }
                                 .pointerInput(Unit) {
                                     detectDragGestures(
                                         onDrag = { change, dragAmount ->
@@ -522,6 +622,13 @@ fun SwipeScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
+                                    // Chat de la quedada (siempre disponible)
+                                    IconButton(
+                                        onClick = { onOpenChat(g.id, g.title) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Text("💬", fontSize = 16.sp)
+                                    }
                                     if (g.seatsTaken < g.seats) {
                                         TextButton(onClick = {
                                             scope.launch {
@@ -545,7 +652,6 @@ fun SwipeScreen(
                             }
                         }
                     }
-
                     groupMsg?.let {
                         Spacer(Modifier.height(8.dp))
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)

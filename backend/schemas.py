@@ -264,3 +264,23 @@ class TripGroupResponse(BaseModel):
 
 class TripGroupJoin(BaseModel):
     pass
+
+
+class GroupMessageCreate(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+
+
+class GroupMessageOut(BaseModel):
+    id: int
+    group_id: int
+    user_id: int
+    username: str
+    text: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BootstrapResult(BaseModel):
+    city: str
+    created: int
+    plans: list[dict]

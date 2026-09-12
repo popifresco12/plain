@@ -91,4 +91,15 @@ interface ApiService {
 
     @DELETE("api/groups/{groupId}/leave")
     suspend fun leaveGroup(@Path("groupId") groupId: Int): Response<FavoriteActionResponse>
+
+    // ===== Chat de quedadas =====
+    @GET("api/groups/{groupId}/messages")
+    suspend fun getGroupMessages(@Path("groupId") groupId: Int): Response<List<GroupMessageResponse>>
+
+    @POST("api/groups/{groupId}/messages")
+    suspend fun sendGroupMessage(@Path("groupId") groupId: Int, @Body body: GroupMessageRequest): Response<GroupMessageResponse>
+
+    // ===== Ciudades dinámicas =====
+    @POST("api/cities/{city}/bootstrap")
+    suspend fun bootstrapCity(@Path("city") city: String): Response<BootstrapResult>
 }
