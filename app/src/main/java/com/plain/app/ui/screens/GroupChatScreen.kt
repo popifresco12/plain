@@ -41,6 +41,14 @@ fun GroupChatScreen(
     var pendingText by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
 
+    // Saber quién soy, para pintar mis mensajes a la derecha
+    LaunchedEffect(groupId) {
+        try {
+            val me = ApiClient.service.getMe()
+            if (me.isSuccessful) myUserId = me.body()?.id
+        } catch (_: Exception) {}
+    }
+
     // Enviar mensaje desde un LaunchedEffect (patrón seguro: nunca escribe
     // estado si la composición sale)
     LaunchedEffect(pendingText) {
@@ -93,7 +101,7 @@ fun GroupChatScreen(
                 title = {
                     Column {
                         Text("💬 $groupTitle", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text("${messages.size} mensajes", fontSize = 11.sp,
+                        Text("${messages.size} mensaje${if (messages.size == 1) "" else "s"}", fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
@@ -221,12 +229,28 @@ private fun MessageBubble(message: GroupMessageResponse, isMine: Boolean) {
                     bottomEnd = if (isMine) 4.dp else 16.dp
                 )
             ) {
-                Text(
-                    text = message.text,
-                    color = textColor,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Text(
+                        text = message.text,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    // Hora del mensaje (si la fecha es parseable)
+                    val hora = remember(message.createdAt) {
+                        try {
+                            val t = message.createdAt.substringAfter("T").take(5)
+                            if (t.length == 5 && t[2] == ':') t else ""
+                        } catch (_: Exception) { "" }
+                    }
+                    if (hora.isNotEmpty()) {
+                        Text(
+                            text = hora,
+                            fontSize = 10.sp,
+                            color = textColor.copy(alpha = 0.7f),
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
+                }
             }
         }
     }
