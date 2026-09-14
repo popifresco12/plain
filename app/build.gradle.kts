@@ -13,8 +13,8 @@ android {
         applicationId = "com.plain.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 22
-        versionName = "0.2.2"
+        versionCode = 31
+        versionName = "0.3.1"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -60,6 +60,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

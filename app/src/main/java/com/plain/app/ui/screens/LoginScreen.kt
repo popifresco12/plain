@@ -152,6 +152,15 @@ fun LoginScreen(
                 color = MaterialTheme.colorScheme.tertiary,
                 textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "versión ${com.plain.app.BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

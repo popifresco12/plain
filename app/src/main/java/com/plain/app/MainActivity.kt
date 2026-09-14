@@ -118,7 +118,14 @@ class MainActivity : ComponentActivity() {
                         val planCreated = navBackStackEntry?.savedStateHandle?.get<Boolean>("plan_created") ?: false
                         SwipeScreen(
                             city = cityName,
-                            onBack = { navController.popBackStack() },
+                            onBack = {
+                                // El swipe es la raíz del stack: popBackStack() no hacía nada.
+                                // Volvemos explícitamente al selector de ciudad mundial.
+                                navController.navigate("city_picker") {
+                                    popUpTo(backStackEntry.destination.id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            },
                             onSettings = { navController.navigate("settings") },
                             onFavorites = { navController.navigate("favorites") },
                             onCreatePlan = {

@@ -227,7 +227,7 @@ fun SwipeScreen(
                         animationSpec = tween(120, easing = FastOutSlowInEasing),
                         label = "nopeScale"
                     )
-                    FilledTonalButton(
+                    FilledIconButton(
                         onClick = {
                             if (topCard != null && !isAnimating) {
                                 offsetX = -500f
@@ -235,16 +235,20 @@ fun SwipeScreen(
                             }
                         },
                         interactionSource = nopeInteraction,
-                        modifier = Modifier.size(64.dp).graphicsLayer {
+                        modifier = Modifier.size(70.dp).graphicsLayer {
                             scaleX = nopeScale
                             scaleY = nopeScale
+                            shadowElevation = 10f
+                            shape = RoundedCornerShape(35.dp)
+                            clip = false
                         },
-                        shape = RoundedCornerShape(32.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = NopeRed.copy(alpha = 0.15f)
+                        shape = RoundedCornerShape(35.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = NopeRed,
+                            contentColor = Color.White
                         )
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "No", tint = NopeRed, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Default.Close, contentDescription = "No", modifier = Modifier.size(32.dp))
                     }
 
                     // Botón ME GUSTA con feedback de pulsación
@@ -255,7 +259,7 @@ fun SwipeScreen(
                         animationSpec = tween(120, easing = FastOutSlowInEasing),
                         label = "likeScale"
                     )
-                    FilledTonalButton(
+                    FilledIconButton(
                         onClick = {
                             if (topCard != null && !isAnimating) {
                                 offsetX = 500f
@@ -263,16 +267,20 @@ fun SwipeScreen(
                             }
                         },
                         interactionSource = likeInteraction,
-                        modifier = Modifier.size(72.dp).graphicsLayer {
+                        modifier = Modifier.size(78.dp).graphicsLayer {
                             scaleX = likeScale
                             scaleY = likeScale
+                            shadowElevation = 12f
+                            shape = RoundedCornerShape(39.dp)
+                            clip = false
                         },
-                        shape = RoundedCornerShape(36.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = LikeGreen.copy(alpha = 0.15f)
+                        shape = RoundedCornerShape(39.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = LikeGreen,
+                            contentColor = Color.White
                         )
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "Me gusta", tint = LikeGreen, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Default.Check, contentDescription = "Me gusta", modifier = Modifier.size(36.dp))
                     }
                 }
             }

@@ -11,6 +11,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -56,7 +58,7 @@ fun PlanCardFromResponse(
             .offset(x = offsetX.dp)
             .rotate(rotation)
             .scale(scale),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         border = if (dragProgress > 0.02f) {
             BorderStroke(
                 width = (2f + dragProgress * 3f).dp,
@@ -64,17 +66,17 @@ fun PlanCardFromResponse(
             )
         } else null,
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 8.dp + (dragProgress * 10f).dp
+            defaultElevation = 10.dp + (dragProgress * 12f).dp
         ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
-            // Banner: imagen por categoría (si existe) o color plano con emoji
+            // ── CABECERA: imagen a sangre con título encima ──
             val catRes = categoryImageRes(plan.category)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(250.dp)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -86,15 +88,43 @@ fun PlanCardFromResponse(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Text(text = plan.emoji, fontSize = 64.sp)
+                    Text(text = plan.emoji, fontSize = 88.sp)
                 }
 
-                // Sello ME GUSTA / NO: aparece y se intensifica con el arrastre
+                // Degradado inferior para que el título se lea sobre la foto
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.65f)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.80f))
+                            )
+                        )
+                )
+
+                // Chip de categoría (arriba izquierda)
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Black.copy(alpha = 0.55f),
+                    modifier = Modifier.align(Alignment.TopStart).padding(14.dp)
+                ) {
+                    Text(
+                        text = "${plan.emoji} ${plan.category}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+
+                // Sello ME GUSTA / NO (crece con el arrastre)
                 if (dragProgress > 0.05f) {
                     Text(
                         text = if (offsetX > 0) "ME GUSTA" else "NO",
                         modifier = Modifier
-                            .align(if (offsetX > 0) Alignment.TopStart else Alignment.TopEnd)
+                            .align(if (offsetX > 0) Alignment.TopEnd else Alignment.BottomStart)
                             .padding(20.dp)
                             .graphicsLayer {
                                 alpha = dragProgress
@@ -103,39 +133,78 @@ fun PlanCardFromResponse(
                             }
                             .background(
                                 color = accent.copy(alpha = 0.35f + dragProgress * 0.65f),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(10.dp)
                             )
                             .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .rotate(if (offsetX > 0) -15f else 15f),
+                            .rotate(if (offsetX > 0) 12f else -12f),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
                     )
                 }
-            }
 
-            // Content
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Título + lugar sobre el degradado
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 18.dp, end = 18.dp, bottom = 16.dp)
                 ) {
                     Text(
                         text = plan.title,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = plan.price,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Spacer(Modifier.height(5.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Place,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.88f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = plan.location,
+                            color = Color.White.copy(alpha = 0.88f),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // ── CUERPO ──
+            Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+
+                // Píldoras de datos clave
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    InfoPill("💰 ${plan.price}", MaterialTheme.colorScheme.primary)
+                    InfoPill("⏱ ${plan.duration}", MaterialTheme.colorScheme.secondary)
+                    val (pEmoji, pLabel, pColor) = when (plan.planType) {
+                        "SOLO" -> Triple("🧑", "Solo", MaterialTheme.colorScheme.tertiary)
+                        "PAREJA" -> Triple("💑", "Pareja", MaterialTheme.colorScheme.secondary)
+                        else -> Triple("👥", "Amigos", MaterialTheme.colorScheme.primary)
+                    }
+                    InfoPill("$pEmoji $pLabel", pColor)
+
+                    // Disponibilidad: solo cuando aporta información
+                    if (plan.availability.isNotBlank() && plan.availability != "Todo el año") {
+                        if (plan.isAvailableNow) {
+                            InfoPill("📅 ${plan.availability}", LikeGreen)
+                        } else {
+                            InfoPill("🔒 ${plan.availability}", NopeRed)
+                        }
+                    }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(14.dp))
 
                 Text(
                     text = plan.description,
@@ -145,86 +214,31 @@ fun PlanCardFromResponse(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(Modifier.height(16.dp))
-
-                // Tags (FlowRow: los chips fluyen sin desbordar)
-                androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                        Text(plan.category, style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                    }
-                    val typeColor = when (plan.planType) {
-                        "SOLO" -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-                        "PAREJA" -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
-                        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                    }
-                    Surface(shape = RoundedCornerShape(20.dp), color = typeColor) {
-                        val label = when (plan.planType) {
-                            "SOLO" -> "🧑 Solo"
-                            "PAREJA" -> "💑 Pareja"
-                            else -> "👥 Ambos"
-                        }
-                        Text(label, style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                    }
-                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Text("⏱ ${plan.duration}", style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                    }
-                    // Chip de disponibilidad: ámbar si es de fechas concretas, neutro si es todo el año
-                    if (plan.availability.isNotBlank() && plan.availability != "Todo el año") {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer
-                        ) {
-                            Text(
-                                "📅 ${plan.availability}",
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                    // Badge de disponibilidad actual: verde si se puede ahora, ámbar si no
-                    if (!plan.isAvailableNow) {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = NopeRed.copy(alpha = 0.15f)
-                        ) {
-                            Text("🔒 Fuera de temporada", style = MaterialTheme.typography.labelSmall,
-                                color = NopeRed,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                        }
-                    } else if (plan.availability.isNotBlank() && plan.availability != "Todo el año") {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = LikeGreen.copy(alpha = 0.15f)
-                        ) {
-                            Text("✅ En temporada", style = MaterialTheme.typography.labelSmall,
-                                color = LikeGreen,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                        }
-                    }
+                if (plan.tags.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = plan.tags.joinToString("  ·  ") { "#$it" },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 Spacer(Modifier.height(16.dp))
 
-                // Action buttons row
+                // Acciones
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Calendar button
                     FilledTonalButton(
                         onClick = { addToCalendar(context, plan) },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                         ),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                     ) {
@@ -233,13 +247,12 @@ fun PlanCardFromResponse(
                         Text("Calendario", style = MaterialTheme.typography.labelSmall)
                     }
 
-                    // Share (WhatsApp / any app)
                     FilledTonalButton(
                         onClick = { sharePlan(context, plan) },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
                         ),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                     ) {
@@ -248,18 +261,21 @@ fun PlanCardFromResponse(
                         Text("Compartir", style = MaterialTheme.typography.labelSmall)
                     }
 
-                    // "Ver más"
-                    TextButton(onClick = { onMoreInfo(plan) }) {
-                        Text("▶", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                    // Detalles + quedadas
+                    Button(
+                        onClick = { onMoreInfo(plan) },
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Text("Ver más", style = MaterialTheme.typography.labelSmall)
                     }
 
-                    // Send to agent
                     if (webhookAvailable) {
                         FilledTonalButton(
                             onClick = { onSendToAgent(plan) },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = LikeGreen.copy(alpha = 0.15f)
+                                containerColor = LikeGreen.copy(alpha = 0.18f)
                             )
                         ) {
                             Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -268,6 +284,23 @@ fun PlanCardFromResponse(
                 }
             }
         }
+    }
+}
+
+/** Píldora de dato clave (precio, duración, tipo…). */
+@Composable
+private fun InfoPill(text: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = color.copy(alpha = 0.14f)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = color,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
     }
 }
 
@@ -327,7 +360,7 @@ private fun sharePlan(context: Context, emoji: String, title: String, location: 
         append(description)
         appendLine()
         appendLine()
-        append("— vía PLΛIN")
+        appendLine("— vía PLΛIN")
     }
 
     val intent = Intent(Intent.ACTION_SEND).apply {
