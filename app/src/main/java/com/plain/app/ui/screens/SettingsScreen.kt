@@ -139,6 +139,8 @@ fun SettingsScreen(
                             } else {
                                 error = "Error al guardar (${resp.code()})"
                             }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e   // cancelación normal: no es un error de conexión
                         } catch (e: Exception) {
                             error = "Error de conexión: ${e.localizedMessage}"
                         } finally {

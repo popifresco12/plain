@@ -45,6 +45,8 @@ fun FavoritesScreen(
                 } else {
                     error = "Error (${resp.code()})"
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e   // cancelación normal (recomposición/navegación): no es un error
             } catch (e: Exception) {
                 error = "Error de conexión: ${e.localizedMessage}"
             } finally {
