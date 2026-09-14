@@ -109,9 +109,12 @@ fun SwipeScreen(
         prefs.edit().putStringSet("seen_plan_ids", seen).apply()
     }
 
-    // Load plans from API (recarga al cambiar ciudad O al volver de crear plan)
-    LaunchedEffect(city, refreshKey, planCreated) {
-        if (planCreated) refreshKey++
+    // Recarga de planes al cambiar de ciudad o al pedir refresco.
+    // IMPORTANTE: planCreated NO está entre las claves; se consume en un efecto
+    // aparte. Si incrementásemos refreshKey dentro de este mismo efecto, Compose
+    // cancelaría el efecto a media petición y el catch mostraría
+    // "The coroutine scope left the composition" como si fuera un error real.
+    LaunchedEffect(city, refreshKey) {
         try {
             var resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
 
@@ -126,6 +129,8 @@ fun SwipeScreen(
                         feedbackText = "✨ ¡Hemos creado $created planes en ${city.lowercase().replaceFirstChar { it.uppercase() }}!"
                     }
                     resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     // Si falla el bootstrap, seguimos con la lista vacía
                 }
@@ -142,11 +147,19 @@ fun SwipeScreen(
             } else {
                 error = "Error al cargar planes (${resp.code()})"
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e   // cancelación normal (recomposición/navegación): NO es un error
         } catch (e: Exception) {
             error = "Error de conexión: ${e.localizedMessage}"
         } finally {
             loading = false
         }
+    }
+
+    // Al volver de crear un plan, refrescar la lista (efecto propio para no
+    // cancelar la carga en curso)
+    LaunchedEffect(planCreated) {
+        if (planCreated) refreshKey++
     }
 
     // Check if webhook is configured
