@@ -35,6 +35,7 @@ class TokenResponse(BaseModel):
 # === Plans ===
 
 class PlanCreate(BaseModel):
+    image_url: Optional[str] = None
     title: str
     description: str
     location: str
@@ -81,6 +82,7 @@ class PlanResponse(BaseModel):
     is_available_now: bool = True  # Computed: active AND within dates
     # Distancia en km a la ciudad del usuario (solo con radius_km > 0)
     distance_km: Optional[float] = None
+    image_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -122,6 +124,7 @@ class BusinessTokenResponse(BaseModel):
 
 
 class SponsoredPlanCreate(BaseModel):
+    image_url: Optional[str] = None
     title: str
     description: str
     location: str
@@ -286,3 +289,68 @@ class BootstrapResult(BaseModel):
     city: str
     created: int
     plans: list[dict]
+
+
+# === Crash reports (fallos de la app) ===
+
+class CrashReportIn(BaseModel):
+    app_version: Optional[str] = None
+    android_version: Optional[str] = None
+    device: Optional[str] = None
+    screen: Optional[str] = None
+    message: Optional[str] = None
+    stacktrace: Optional[str] = None
+    username: Optional[str] = None
+
+
+class CrashReportOut(CrashReportIn):
+    id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# === Imágenes de planes ===
+
+class ImageSearchResult(BaseModel):
+    """Resultado de la búsqueda de fotos para un plan."""
+    title: str
+    url: str
+    thumb: str
+    license: str
+    attribution: str
+
+
+class PlanReportIn(BaseModel):
+    reason: str = "otro"
+    comment: Optional[str] = None
+
+
+class ForgotPasswordIn(BaseModel):
+    email: str
+
+
+class ResetPasswordIn(BaseModel):
+    email: str
+    code: str
+    new_password: str
+
+
+class VerifyEmailIn(BaseModel):
+    email: str
+    code: str
+
+
+class EventIn(BaseModel):
+    plan_id: Optional[int] = None
+    event: str
+    city: Optional[str] = None
+
+
+class EventsIn(BaseModel):
+    events: list[EventIn]
+
+
+class ProfileUpdateIn(BaseModel):
+    email: Optional[str] = None
+    username: Optional[str] = None

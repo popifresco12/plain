@@ -11,6 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import com.plain.app.data.ApiClient
 import com.plain.app.data.AuthManager
 import com.plain.app.data.CityPreferences
+import com.plain.app.data.CrashReporter
 import com.plain.app.data.LocationHelper
 import com.plain.app.data.auth.BiometricAuthHelper
 import com.plain.app.ui.screens.BusinessAuthScreen
@@ -35,6 +36,11 @@ class MainActivity : ComponentActivity() {
 
         // Load saved token
         AuthManager.init(this)
+
+        // Captura de fallos: engancha el handler y manda lo pendiente de la
+        // sesión anterior (si la app petó, el informe llega aquí).
+        CrashReporter.install(this)
+        CrashReporter.flush(this)
         val appContext = applicationContext
 
         setContent {

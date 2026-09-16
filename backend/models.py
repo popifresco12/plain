@@ -15,6 +15,7 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    email_verified = Column(Boolean, default=False)  # verificación opcional (flag REQUIRE_EMAIL_VERIFICATION)
 
     plans = relationship("Plan", back_populates="creator")
     webhook = relationship("WebhookConfig", back_populates="user", uselist=False)
@@ -55,6 +56,7 @@ class Plan(Base):
     city = Column(String(50), nullable=False)  # BARCELONA, VILLENA
     emoji = Column(String(10), nullable=False, default="📍")
     tags = Column(Text, nullable=False, default="[]")  # JSON array
+    image_url = Column(String(500), nullable=True)  # foto del plan (búsqueda online o URL propia)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_default = Column(Boolean, default=False)  # Seed plans
 
@@ -181,3 +183,67 @@ class GroupMessage(Base):
 
     group = relationship("TripGroup")
     user = relationship("User")
+
+
+class CrashReport(Base):
+    """Fallo reportado por la app Android.
+
+    Existe porque sin emulador ni analytics no había forma de enterarse de que
+    la app petaba en el móvil: el usuario solo podía decir «no va».
+    """
+    __tablename__ = "crash_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    app_version = Column(String(24), nullable=True)
+    android_version = Column(String(24), nullable=True)
+    device = Column(String(80), nullable=True)
+    screen = Column(String(80), nullable=True)
+    message = Column(Text, nullable=True)
+    stacktrace = Column(Text, nullable=True)
+    username = Column(String(50), nullable=True)
+    user_id = Column(Integer, nullable=True)
+
+
+class PlanReport(Base):
+    """Reporte de un plan por parte de un usuario (moderación mínima)."""
+    __tablename__ = "plan_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("plans.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reason = Column(String(60), nullable=False, default="otro")
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class AccountCode(Base):
+    """Código de un solo uso para recuperar contraseña o verificar el email.
+
+    Se guarda hasheado (nunca en claro) con caducidad, así que aunque alguien
+    lea la base de datos no puede usarlo.
+    """
+    __tablename__ = "account_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    purpose = Column(String(20), nullable=False)        # "reset" | "verify_email"
+    code_hash = Column(String(255), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PlanEvent(Base):
+    """Evento de producto (visto, me gusta, descartado, abierto, favorito).
+
+    Sin esto no hay forma de saber qué contenido funciona: se decidía a ojo.
+    """
+    __tablename__ = "plan_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, nullable=True, index=True)
+    user_id = Column(Integer, nullable=True, index=True)
+    city = Column(String(50), nullable=True)
+    event = Column(String(20), nullable=False)          # view | like | dislike | open | favorite
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)

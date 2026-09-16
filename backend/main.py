@@ -1,8 +1,9 @@
 import ipaddress
 import json
 import os
+import secrets
 import socket
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -27,8 +28,31 @@ from auth import (
     verify_password,
 )
 from database import Base, SessionLocal, engine, get_db
-from models import Business, DislikedTag, Favorite, GroupMessage, Plan, TripGroup, TripGroupMember, User, WebhookConfig
+from models import (
+    AccountCode,
+    Business,
+    CrashReport,
+    DislikedTag,
+    Favorite,
+    GroupMessage,
+    Plan,
+    PlanEvent,
+    PlanReport,
+    TripGroup,
+    TripGroupMember,
+    User,
+    WebhookConfig,
+)
 from schemas import (
+    EventsIn,
+    ForgotPasswordIn,
+    ImageSearchResult,
+    PlanReportIn,
+    ProfileUpdateIn,
+    ResetPasswordIn,
+    VerifyEmailIn,
+    CrashReportIn,
+    CrashReportOut,
     BootstrapResult,
     BudgetTopUp,
     BusinessLogin,
@@ -65,6 +89,10 @@ app = FastAPI(title="PLAIN API", version="2.1.0")
 @app.on_event("startup")
 def seed_on_startup():
     """Seed automático en producción (uvicorn main:app no pasa por __main__)."""
+    try:
+        ensure_schema()
+    except Exception as e:
+        print(f"⚠️ ensure_schema falló (no crítico): {e}")
     try:
         seed_plans()
     except Exception as e:
@@ -107,7 +135,24 @@ os.makedirs(web_dir, exist_ok=True)
 app.mount("/business", StaticFiles(directory=web_dir, html=True), name="business")
 
 
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.6.0"
+
+# Verificación de email: implementada pero APAGADA por defecto (para poder probar
+# sin depender del correo). Pon REQUIRE_EMAIL_VERIFICATION=1 en el entorno para activarla.
+REQUIRE_EMAIL_VERIFICATION = os.environ.get("REQUIRE_EMAIL_VERIFICATION", "0").lower() in ("1", "true", "yes")
+
+# Límite de planes creados por usuario (anti-spam; los planes semilla no cuentan)
+MAX_PLANS_PER_USER = int(os.environ.get("MAX_PLANS_PER_USER", "25"))
+
+# Códigos de un solo uso (recuperar contraseña / verificar email)
+CODE_TTL_MINUTES = 30
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER")
+SMTP_PASS = os.environ.get("SMTP_PASS")
+
+# Búsqueda de fotos: Openverse agrega imágenes Creative Commons y NO necesita API key
+OPENVERSE_URL = "https://api.openverse.org/v1/images/"
 
 
 @app.get("/health")
@@ -167,6 +212,103 @@ SEED_PLANS = [
 ]
 
 
+def _new_code() -> str:
+    """Código de 6 caracteres legible (sin letras que se confunden)."""
+    alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alfabeto) for _ in range(6))
+
+
+def _store_code(db: Session, user_id: int, purpose: str) -> str:
+    """Guarda (hasheado) un código nuevo para el usuario y devuelve el claro."""
+    db.query(AccountCode).filter(
+        AccountCode.user_id == user_id,
+        AccountCode.purpose == purpose,
+        AccountCode.used == False,
+    ).update({"used": True})
+    codigo = _new_code()
+    db.add(AccountCode(
+        user_id=user_id,
+        purpose=purpose,
+        code_hash=hash_password(codigo),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES),
+    ))
+    db.commit()
+    return codigo
+
+
+def _check_code(db: Session, user_id: int, purpose: str, code: str) -> bool:
+    fila = (
+        db.query(AccountCode)
+        .filter(
+            AccountCode.user_id == user_id,
+            AccountCode.purpose == purpose,
+            AccountCode.used == False,
+        )
+        .order_by(AccountCode.created_at.desc())
+        .first()
+    )
+    if not fila:
+        return False
+    expira = fila.expires_at
+    if expira.tzinfo is None:
+        expira = expira.replace(tzinfo=timezone.utc)
+    if expira < datetime.now(timezone.utc):
+        return False
+    if not verify_password(code.strip().upper(), fila.code_hash):
+        return False
+    fila.used = True
+    db.commit()
+    return True
+
+
+def _send_code_email(email: str, code: str, purpose: str) -> bool:
+    """Envía el código por email. Sin SMTP configurado devuelve False (modo pruebas)."""
+    if not (SMTP_USER and SMTP_PASS):
+        return False
+    asunto = "PLAIN - código para recuperar tu contraseña" if purpose == "reset" else "PLAIN - verifica tu email"
+    cuerpo = (
+        f"Tu código es: {code}\n\n"
+        f"Caduca en {CODE_TTL_MINUTES} minutos. Si no has sido tú, ignora este mensaje.\n\n"
+        "— PLAIN"
+    )
+    try:
+        import smtplib
+        from email.message import EmailMessage
+
+        msg = EmailMessage()
+        msg["From"] = SMTP_USER
+        msg["To"] = email
+        msg["Subject"] = asunto
+        msg.set_content(cuerpo)
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as smtp:
+            smtp.starttls()
+            smtp.login(SMTP_USER, SMTP_PASS)
+            smtp.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+
+def ensure_schema() -> None:
+    """Añade columnas nuevas a tablas ya existentes (create_all no las añade).
+
+    Sin esto, en producción (base de datos que ya existe) las columnas nuevas
+    no aparecerían y todo fallaría con «no such column».
+    """
+    columnas = [
+        ("plans", "image_url", "VARCHAR(500)"),
+        ("users", "email_verified", "BOOLEAN DEFAULT 0"),
+    ]
+    with engine.connect() as conn:
+        for tabla, columna, tipo in columnas:
+            try:
+                conn.exec_driver_sql(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+                print(f"🛠️  +{tabla}.{columna}")
+            except Exception:
+                pass  # ya existe
+        conn.commit()
+
+
 def seed_plans():
     """Insert seed plans if DB is empty."""
     db = SessionLocal()
@@ -192,6 +334,290 @@ def seed_plans():
 
 
 # === Routes ===
+
+
+# --- Crash reports (fallos de la app) ---
+
+
+@app.post("/api/crash-reports", status_code=201)
+@limiter.limit("60/hour")
+def report_crash(request: Request, data: CrashReportIn, db: Session = Depends(get_db)):
+    """Recibe un fallo de la app.
+
+    Sin autenticación a propósito: la app puede reventar antes de que el usuario
+    inicie sesión, y en ese caso el informe es justo el que más interesa.
+    """
+    def rec(v, n):
+        return (v or "")[:n] or None
+
+    report = CrashReport(
+        app_version=rec(data.app_version, 24),
+        android_version=rec(data.android_version, 24),
+        device=rec(data.device, 80),
+        screen=rec(data.screen, 80),
+        message=rec(data.message, 2000),
+        stacktrace=rec(data.stacktrace, 8000),
+        username=rec(data.username, 50),
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    return {"status": "ok", "id": report.id}
+
+
+@app.get("/api/crash-reports", response_model=list[CrashReportOut])
+def list_crash_reports(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Últimos fallos registrados (requiere sesión), para depurar."""
+    limit = max(1, min(int(limit or 50), 200))
+    return (
+        db.query(CrashReport)
+        .order_by(CrashReport.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+# --- Fotos de planes (búsqueda online, sin almacenamiento propio) ---
+
+
+@app.get("/api/images/search", response_model=list[ImageSearchResult])
+@limiter.limit("40/hour")
+def search_plan_images(
+    request: Request,
+    q: str,
+    user: User = Depends(get_current_user),
+):
+    """Busca fotos para un plan en Openverse (Creative Commons, sin API key).
+
+    No guardamos ficheros: Render borra el disco en cada despliegue. Se devuelve
+    la URL de la imagen elegida y el negocio/usuario decide cuál usar.
+    """
+    q = (q or "").strip()
+    if len(q) < 3:
+        raise HTTPException(status_code=400, detail="Escribe al menos 3 caracteres")
+
+    try:
+        with httpx.Client(timeout=12, headers={"User-Agent": "PLAIN/1.0 (app de planes)"}) as client:
+            r = client.get(OPENVERSE_URL, params={
+                "q": q,
+                "page_size": 12,
+                "license_type": "commercial",
+                "mature": "false",
+            })
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail="El buscador de imágenes no responde")
+        datos = r.json()
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="El buscador de imágenes no responde")
+
+    salida = []
+    for item in datos.get("results", [])[:12]:
+        url = item.get("url")
+        if not url:
+            continue
+        salida.append(ImageSearchResult(
+            title=(item.get("title") or "Sin título")[:120],
+            url=url,
+            thumb=item.get("thumbnail") or url,
+            license=(item.get("license") or "") + (" " + item.get("license_version", "") if item.get("license_version") else ""),
+            attribution=(item.get("creator") or item.get("source") or "")[:120],
+        ))
+    return salida
+
+
+@app.put("/api/me")
+def update_profile(
+    data: ProfileUpdateIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Edita el perfil (email o nombre de usuario)."""
+    if data.email and data.email != user.email:
+        nuevo = data.email.strip().lower()
+        if db.query(User).filter(User.email == nuevo, User.id != user.id).first():
+            raise HTTPException(status_code=400, detail="Ese email ya está en uso")
+        user.email = nuevo
+        user.email_verified = False          # al cambiarlo hay que volver a verificar
+    if data.username and data.username != user.username:
+        nuevo = data.username.strip()
+        if len(nuevo) < 3:
+            raise HTTPException(status_code=400, detail="El nombre debe tener al menos 3 caracteres")
+        if db.query(User).filter(User.username == nuevo, User.id != user.id).first():
+            raise HTTPException(status_code=400, detail="Ese nombre ya está en uso")
+        user.username = nuevo
+    db.commit()
+    db.refresh(user)
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "email_verified": bool(user.email_verified),
+        "created_at": user.created_at,
+    }
+
+
+@app.get("/api/me/status")
+def my_status(user: User = Depends(get_current_user)):
+    """Estado de la cuenta (si la verificación de email está activa, informa)."""
+    return {
+        "email_verified": bool(user.email_verified),
+        "requires_verification": REQUIRE_EMAIL_VERIFICATION,
+        "max_plans": MAX_PLANS_PER_USER,
+    }
+
+
+# --- Recuperar contraseña / verificar email ---
+
+
+@app.post("/api/password/forgot")
+@limiter.limit("10/hour")
+def forgot_password(request: Request, data: ForgotPasswordIn, db: Session = Depends(get_db)):
+    """Genera un código de recuperación y lo manda por email si hay SMTP.
+
+    Sin SMTP configurado devuelve el código en la respuesta (modo pruebas) y avisa.
+    """
+    email = (data.email or "").strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    # Respuesta idéntica exista o no el email (no revelamos qué correos están dados de alta)
+    if not user:
+        return {"status": "ok", "sent": False}
+
+    codigo = _store_code(db, user.id, "reset")
+    enviado = _send_code_email(user.email, codigo, "reset")
+    respuesta = {"status": "ok", "sent": enviado}
+    if not enviado:
+        respuesta["dev_code"] = codigo
+        respuesta["warning"] = "SMTP no configurado: el código se devuelve aquí (solo para pruebas)"
+    return respuesta
+
+
+@app.post("/api/password/reset")
+@limiter.limit("20/hour")
+def reset_password(request: Request, data: ResetPasswordIn, db: Session = Depends(get_db)):
+    email = (data.email or "").strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not _check_code(db, user.id, "reset", data.code):
+        raise HTTPException(status_code=400, detail="Código incorrecto o caducado")
+    if len(data.new_password or "") < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+    user.password_hash = hash_password(data.new_password)
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.post("/api/email/verify/request")
+@limiter.limit("10/hour")
+def request_email_verification(request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    codigo = _store_code(db, user.id, "verify_email")
+    enviado = _send_code_email(user.email, codigo, "verify_email")
+    respuesta = {"status": "ok", "sent": enviado}
+    if not enviado:
+        respuesta["dev_code"] = codigo
+        respuesta["warning"] = "SMTP no configurado: el código se devuelve aquí (solo para pruebas)"
+    return respuesta
+
+
+@app.post("/api/email/verify")
+def verify_email(data: VerifyEmailIn, db: Session = Depends(get_db)):
+    email = (data.email or "").strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not _check_code(db, user.id, "verify_email", data.code):
+        raise HTTPException(status_code=400, detail="Código incorrecto o caducado")
+    user.email_verified = True
+    db.commit()
+    return {"status": "ok", "email_verified": True}
+
+
+# --- Moderación ---
+
+
+@app.post("/api/plans/{plan_id}/report", status_code=201)
+@limiter.limit("20/hour")
+def report_plan(request: Request, plan_id: int, data: PlanReportIn,
+                db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Reporta un plan (moderación mínima)."""
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    ya = db.query(PlanReport).filter(PlanReport.plan_id == plan_id, PlanReport.user_id == user.id).first()
+    if ya:
+        return {"status": "already_reported"}
+    db.add(PlanReport(
+        plan_id=plan_id,
+        user_id=user.id,
+        reason=(data.reason or "otro")[:60],
+        comment=(data.comment or "")[:500] or None,
+    ))
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.get("/api/reports")
+def list_reports(limit: int = 50, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Reportes recibidos, para revisarlos (requiere sesión)."""
+    limit = max(1, min(int(limit or 50), 200))
+    filas = db.query(PlanReport).order_by(PlanReport.created_at.desc()).limit(limit).all()
+    return [
+        {"id": f.id, "plan_id": f.plan_id, "reason": f.reason,
+         "comment": f.comment, "created_at": f.created_at}
+        for f in filas
+    ]
+
+
+# --- Analítica de producto ---
+
+
+@app.post("/api/events", status_code=202)
+@limiter.limit("200/hour")
+def track_events(request: Request, data: EventsIn, db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)):
+    """Guarda eventos de la app (visto, me gusta, descartado, abierto).
+
+    Se envían en lote para no castigar la batería ni la red del móvil.
+    """
+    validos = {"view", "like", "dislike", "open", "favorite"}
+    guardados = 0
+    for ev in (data.events or [])[:100]:
+        if ev.event not in validos:
+            continue
+        db.add(PlanEvent(
+            plan_id=ev.plan_id,
+            user_id=user.id,
+            city=(ev.city or "")[:50] or None,
+            event=ev.event,
+        ))
+        guardados += 1
+    db.commit()
+    return {"status": "ok", "stored": guardados}
+
+
+@app.get("/api/stats/product")
+def product_stats(days: int = 30, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Resumen de producto: qué se ve, qué gusta y qué se descarta."""
+    days = max(1, min(int(days or 30), 365))
+    desde = datetime.now(timezone.utc) - timedelta(days=days)
+    filas = db.query(PlanEvent).filter(PlanEvent.created_at >= desde).all()
+    por_evento: dict[str, int] = {}
+    por_ciudad: dict[str, dict[str, int]] = {}
+    for f in filas:
+        por_evento[f.event] = por_evento.get(f.event, 0) + 1
+        if f.city:
+            por_ciudad.setdefault(f.city, {})
+            por_ciudad[f.city][f.event] = por_ciudad[f.city].get(f.event, 0) + 1
+    likes = por_evento.get("like", 0)
+    descartes = por_evento.get("dislike", 0)
+    total = likes + descartes
+    return {
+        "desde": desde.isoformat(),
+        "dias": days,
+        "eventos": por_evento,
+        "por_ciudad": por_ciudad,
+        "tasa_like": round(likes / total, 3) if total else None,
+    }
 
 
 @app.get("/")
@@ -229,6 +655,11 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    if REQUIRE_EMAIL_VERIFICATION and not user.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Verifica tu email antes de entrar (revisa tu correo o pide otro código)",
+        )
     return TokenResponse(
         access_token=create_access_token(user.id),
         user=UserResponse.model_validate(user),
@@ -302,6 +733,7 @@ def create_sponsored_plan(
         city=data.city,
         emoji=data.emoji,
         tags=json.dumps(data.tags),
+        image_url=data.image_url,
         business_id=business.id,
         is_sponsored=True,
         budget_cents=data.budget_cents,
@@ -424,6 +856,8 @@ def plan_is_available(p: Plan) -> bool:
 def list_plans(
     city: Optional[str] = None,
     radius_km: int = 0,
+    limit: int = 200,
+    offset: int = 0,
     plan_type: Optional[str] = None,
     category: Optional[str] = None,
     only_available: bool = False,
@@ -510,6 +944,11 @@ def list_plans(
             return sum(1 for t in p_tags if t in disliked_tag_set)
         all_plans.sort(key=plan_score)
 
+    # Paginación: por defecto 200 (la app sigue pidiendo una sola página)
+    limit = max(1, min(int(limit or 200), 500))
+    offset = max(0, int(offset or 0))
+    all_plans = all_plans[offset:offset + limit]
+
     # Annotate availability + distance
     for p in all_plans:
         p.is_available_now = plan_is_available(p)
@@ -524,9 +963,17 @@ def create_plan(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """Crea un plan. Limitado por usuario para evitar que una cuenta inunde la ciudad."""
+    creados_por_usuario = db.query(Plan).filter(Plan.created_by == user.id).count()
+    if creados_por_usuario >= MAX_PLANS_PER_USER:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Has alcanzado el límite de {MAX_PLANS_PER_USER} planes. Elimina alguno para crear más.",
+        )
     plan = Plan(
-        **data.model_dump(exclude={"tags"}),
+        **data.model_dump(exclude={"tags", "image_url"}),
         tags=json.dumps(data.tags),
+        image_url=data.image_url,
         created_by=user.id,
     )
     db.add(plan)
