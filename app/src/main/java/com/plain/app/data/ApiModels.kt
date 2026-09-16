@@ -143,6 +143,11 @@ data class BudgetTopUpRequest(
     @SerializedName("amount_cents") val amountCents: Int
 )
 
+data class CheckoutSessionResponse(
+    val url: String,
+    @SerializedName("session_id") val sessionId: String = ""
+)
+
 data class BudgetTopUpResponse(
     val status: String,
     @SerializedName("new_balance_cents") val newBalanceCents: Int

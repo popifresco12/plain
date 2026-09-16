@@ -13,6 +13,8 @@ import com.plain.app.data.AuthManager
 import com.plain.app.data.CityPreferences
 import com.plain.app.data.LocationHelper
 import com.plain.app.data.auth.BiometricAuthHelper
+import com.plain.app.ui.screens.BusinessAuthScreen
+import com.plain.app.ui.screens.BusinessDashboardScreen
 import com.plain.app.ui.screens.BiometricSettingsScreen
 import com.plain.app.ui.screens.BiometricUnlockScreen
 import com.plain.app.ui.screens.CitySelectionScreen
@@ -60,8 +62,31 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onGoToRegister = { navController.navigate("register") },
-                            onGoToBusiness = { }
+                            onGoToBusiness = { navController.navigate("business") }
                         )
+                    }
+
+                    // Panel de empresa: si ya hay sesión de negocio entra directo al
+                    // dashboard; si no, registro/login (el token de negocio es aparte
+                    // del de usuario, así que se puede usar la app como particular).
+                    composable("business") {
+                        var businessKey by remember { mutableIntStateOf(0) }
+                        val businessLoggedIn = remember(businessKey) {
+                            AuthManager.getBusinessToken() != null
+                        }
+                        key(businessKey) {
+                            if (businessLoggedIn) {
+                                BusinessDashboardScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onLoggedOut = { businessKey++ }
+                                )
+                            } else {
+                                BusinessAuthScreen(
+                                    onAuthenticated = { businessKey++ },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                        }
                     }
 
                     composable("register") {
@@ -72,7 +97,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onGoToLogin = { navController.popBackStack() },
-                            onGoToBusiness = { }
+                            onGoToBusiness = { navController.navigate("business") }
                         )
                     }
 
@@ -135,6 +160,14 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenChat = { groupId, groupTitle ->
                                 navController.navigate("group_chat/$groupId/${android.net.Uri.encode(groupTitle)}")
+                            },
+                            onSwitchCity = { nueva ->
+                                // GPS: el usuario está en otra ciudad; cambiamos sin pasar por el selector
+                                CityPreferences.setCity(appContext, nueva)
+                                navController.navigate("swipe/$nueva") {
+                                    popUpTo(backStackEntry.destination.id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
                             },
                             planCreated = planCreated
                         )

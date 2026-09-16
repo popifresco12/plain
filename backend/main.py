@@ -107,10 +107,23 @@ os.makedirs(web_dir, exist_ok=True)
 app.mount("/business", StaticFiles(directory=web_dir, html=True), name="business")
 
 
+APP_VERSION = "0.4.1"
+
+
 @app.get("/health")
 def health_check():
-    """Healthcheck para orquestadores (Railway, Docker HEALTHCHECK)."""
-    return {"status": "ok"}
+    """Healthcheck para orquestadores (Render, Docker HEALTHCHECK).
+
+    Incluye la versión y el commit desplegado: Render lo inyecta en
+    RENDER_GIT_COMMIT, así que el workflow puede comprobar de verdad si
+    producción está al día (el auto-deploy ya falló en silencio una vez).
+    """
+    commit = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "desconocido"
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "commit": commit[:8],
+    }
 
 
 # === Seed data ===
@@ -161,8 +174,8 @@ def seed_plans():
         count = db.query(Plan).filter(Plan.is_default == True).count()
         if count == 0:
             for p in SEED_PLANS:
-                tags = p.pop("tags", [])
                 data = dict(p)
+                tags = data.pop("tags", [])   # copia: no mutar SEED_PLANS
                 # parsear fechas a date objects (PostgreSQL exige Date, no str)
                 if data.get("available_from"):
                     data["available_from"] = date.fromisoformat(str(data["available_from"]))

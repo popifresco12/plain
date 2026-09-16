@@ -1,0 +1,71 @@
+name: Deploy backend a Render
+
+# Despliega el backend cuando cambia algo en backend/ y comprueba de verdad
+# que producción sirve el commit correcto. Existe porque el auto-deploy de
+# Render dejó de disparar sin avisar: producción quedó días atrás en silencio.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Desplegar y verificar
+    runs-on: ubuntu-latest
+    steps:
+      - name: ¿Hay secretos configurados?
+        id: check
+        run: |
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ] || [ -z "${{ secrets.RENDER_SERVICE_ID }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Faltan RENDER_API_KEY y/o RENDER_SERVICE_ID (Settings → Secrets and variables → Actions). Ver DEPLOY.md."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lanzar deploy en Render
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}' \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" > /dev/null
+          echo "Deploy lanzado para ${{ github.sha }}"
+
+      - name: Esperar a que esté live
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          for i in $(seq 1 40); do
+            sleep 15
+            state=$(curl -sS -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys?limit=1" \
+              | python3 -c "import json,sys;print(json.load(sys.stdin)[0]['deploy']['status'])")
+            echo "estado del deploy: $state"
+            case "$state" in
+              live) exit 0 ;;
+              build_failed|update_failed|pre_deploy_failed|canceled) echo "::error::Deploy fallido ($state)"; exit 1 ;;
+            esac
+          done
+          echo "::error::Timeout esperando el deploy"; exit 1
+
+      - name: Verificar el commit servido en producción
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          expected="${GITHUB_SHA:0:8}"
+          for i in $(seq 1 20); do
+            commit=$(curl -fsS https://plain-api.onrender.com/health \
+              | python3 -c "import json,sys;print(json.load(sys.stdin).get('commit',''))")
+            echo "producción: '$commit'  |  esperado: '$expected'"
+            if [ "$commit" = "desconocido" ] || [ -z "$commit" ]; then
+              echo "::warning::No puedo leer el commit de producción (¿RENDER_GIT_COMMIT disponible?). Health OK igualmente."
+              curl -fsS https://plain-api.onrender.com/health
+              exit 0
+            fi
+            [ "$commit" = "$expected" ] && exit 0
+            sleep 15
+          done
+          echo "::error::Producción no sirve el commit $expected"; exit 1

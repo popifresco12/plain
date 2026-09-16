@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Share
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.plain.app.data.ApiClient
 import com.plain.app.data.CityPreferences
+import com.plain.app.data.LocationHelper
 import android.content.Context
 import com.plain.app.data.PlanResponse
 import com.plain.app.data.TripGroupCreateRequest
@@ -48,7 +50,9 @@ import com.plain.app.ui.components.addToCalendar
 import com.plain.app.ui.components.sharePlan
 import com.plain.app.ui.theme.LikeGreen
 import com.plain.app.ui.theme.NopeRed
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +63,7 @@ fun SwipeScreen(
     onFavorites: () -> Unit,
     onCreatePlan: () -> Unit,
     onOpenChat: (Int, String) -> Unit = { _, _ -> },
+    onSwitchCity: (String) -> Unit = {},
     planCreated: Boolean = false
 ) {
     var plans by remember { mutableStateOf<List<PlanResponse>>(emptyList()) }
@@ -76,9 +81,16 @@ fun SwipeScreen(
     // Estado de grupos: vive al nivel del SwipeScreen (no del diálogo) para
     // evitar "coroutine scope left the composition" al cerrar el diálogo
     var groups by remember { mutableStateOf<List<TripGroupResponse>>(emptyList()) }
+    // Mensajes sin leer por quedada (contador de avisos)
+    var unread by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var groupsLoading by remember { mutableStateOf(false) }
     var groupMsg by remember { mutableStateOf<String?>(null) }
     var currentGroupsPlan by remember { mutableStateOf<Int?>(null) }
+
+    // Contexto y prefs van ANTES de loadGroups: esa función los usa para saber
+    // qué mensajes de cada quedada ya se han visto.
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("plain_swipes", Context.MODE_PRIVATE) }
 
     fun loadGroups(planId: Int) {
         groupsLoading = true
@@ -88,6 +100,22 @@ fun SwipeScreen(
                 val resp = ApiClient.service.getPlanGroups(planId)
                 if (resp.isSuccessful) {
                     groups = resp.body() ?: emptyList()
+                    // Avisos: cuenta los mensajes posteriores a la última visita de
+                    // cada quedada (sin servidor de push, así que se calcula al listar)
+                    val nuevos = mutableMapOf<Int, Int>()
+                    for (g in groups) {
+                        try {
+                            val msgs = ApiClient.service.getGroupMessages(g.id)
+                            val lista = msgs.body() ?: emptyList()
+                            val visto = CityPreferences.getChatSeen(context, g.id)
+                            val pendientes = lista.count { m ->
+                                val t = parseIsoMillis(m.createdAt)
+                                t != null && t > visto
+                            }
+                            if (pendientes > 0) nuevos[g.id] = pendientes
+                        } catch (_: Exception) { /* si un grupo falla, seguimos con el resto */ }
+                    }
+                    unread = nuevos
                 }
             } catch (_: Exception) {}
             groupsLoading = false
@@ -104,10 +132,6 @@ fun SwipeScreen(
         }
     }
 
-    // Persistencia de planes ya vistos (no vuelven a salir aunque recargues)
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("plain_swipes", Context.MODE_PRIVATE) }
-
     // Radio de búsqueda en km (0 = solo esta ciudad). Permite ver planes de
     // ciudades cercanas sin tener que cambiar de ciudad. Persistente.
     var radiusKm by remember { mutableIntStateOf(CityPreferences.getRadiusKm(context)) }
@@ -118,6 +142,12 @@ fun SwipeScreen(
     var filterCategory by remember { mutableStateOf(CityPreferences.getFilterCategory(context)) }
     var filterFree by remember { mutableStateOf(CityPreferences.getFilterFree(context)) }
     var showFilters by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    // Ciudad detectada por GPS: si no es la elegida, ofrecemos cambiarla
+    var gpsCity by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    // La lista completa se guarda aparte para poder buscar sin recargar del servidor
+    var allPlans by remember { mutableStateOf<List<PlanResponse>>(emptyList()) }
     val filterCount = (if (filterType != null) 1 else 0) +
         (if (filterCategory != null) 1 else 0) + (if (filterFree) 1 else 0)
 
@@ -160,7 +190,8 @@ fun SwipeScreen(
                 var loaded = resp.body()?.filter { it.id.toString() !in seen } ?: emptyList()
                 if (filterFree) loaded = loaded.filter { it.price.trim().startsWith("0") }
                 val fresh = loaded.shuffled()
-                plans = fresh
+                allPlans = fresh
+                plans = filterPlans(fresh, query)
                 error = if (fresh.isEmpty()) {
                     "Ya has visto todos los planes de esta ciudad. ¡Vuelve mañana para más!"
                 } else null
@@ -174,6 +205,19 @@ fun SwipeScreen(
         } finally {
             loading = false
         }
+    }
+
+    // GPS: solo consulta si hay permiso (si no, no molestamos con nada)
+    LaunchedEffect(city) {
+        gpsCity = withContext(Dispatchers.IO) {
+            if (LocationHelper.hasLocationPermission(context)) LocationHelper.detectCity(context) else null
+        }
+    }
+
+    // Búsqueda: filtra en memoria (no vuelve a pedir al servidor) y reinicia el mazo
+    LaunchedEffect(query) {
+        plans = filterPlans(allPlans, query)
+        currentIndex = 0
     }
 
     // Al volver de crear un plan, refrescar la lista (efecto propio para no
@@ -247,6 +291,17 @@ fun SwipeScreen(
                     IconButton(onClick = onFavorites) {
                         Icon(Icons.Default.Favorite, contentDescription = "Favoritos", tint = MaterialTheme.colorScheme.primary)
                     }
+                    IconButton(onClick = {
+                        showSearch = !showSearch
+                        if (!showSearch) query = ""
+                    }) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Buscar",
+                            tint = if (query.isNotBlank()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(onClick = { showFilters = true }) {
                         Icon(
                             Icons.Default.Tune,
@@ -272,6 +327,60 @@ fun SwipeScreen(
                     CityPreferences.setRadiusKm(context, km)
                 }
             )
+            val detected = gpsCity
+            if (detected != null && !detected.equals(city, ignoreCase = true)) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                    ) {
+                        Text(
+                            "📍 Estás cerca de ${detected.lowercase().replaceFirstChar { it.uppercase() }}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { onSwitchCity(detected) }) {
+                            Text("Ver planes")
+                        }
+                    }
+                }
+            }
+            if (showSearch) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Buscar planes, sitios, etiquetas…") },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotBlank()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Limpiar")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    shape = MaterialTheme.shapes.small
+                )
+                if (query.isNotBlank()) {
+                    Text(
+                        text = if (plans.isEmpty()) "Sin resultados para «$query»"
+                        else "${plans.size} resultado${if (plans.size == 1) "" else "s"} para «$query»",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 20.dp, bottom = 8.dp)
+                    )
+                }
+            }
             }
         },
         bottomBar = {
@@ -697,12 +806,33 @@ fun SwipeScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    // Chat de la quedada (siempre disponible)
-                                    IconButton(
-                                        onClick = { onOpenChat(g.id, g.title) },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Text("💬", fontSize = 16.sp)
+                                    // Chat de la quedada (con aviso de mensajes nuevos)
+                                    Box {
+                                        IconButton(
+                                            onClick = {
+                                                CityPreferences.setChatSeen(context, g.id, System.currentTimeMillis())
+                                                unread = unread - g.id
+                                                onOpenChat(g.id, g.title)
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Text("💬", fontSize = 16.sp)
+                                        }
+                                        val pend = unread[g.id] ?: 0
+                                        if (pend > 0) {
+                                            Surface(
+                                                shape = RoundedCornerShape(9.dp),
+                                                color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.align(Alignment.TopEnd)
+                                            ) {
+                                                Text(
+                                                    if (pend > 9) "9+" else "$pend",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onError,
+                                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                     if (g.seatsTaken < g.seats) {
                                         TextButton(onClick = {
@@ -964,4 +1094,36 @@ private fun FilterDialog(
             TextButton(onClick = { t = null; c = null; f = false }) { Text("Limpiar") }
         }
     )
+}
+
+/**
+ * Búsqueda en memoria sobre lo ya cargado: título, descripción, lugar, ciudad y
+ * etiquetas. Se hace en el cliente para que filtrar mientras escribes sea
+ * instantáneo (el backend no tiene endpoint de búsqueda).
+ */
+private fun filterPlans(source: List<PlanResponse>, query: String): List<PlanResponse> {
+    val q = query.trim()
+    if (q.length < 2) return source
+    return source.filter { plan ->
+        plan.title.contains(q, ignoreCase = true) ||
+            plan.description.contains(q, ignoreCase = true) ||
+            plan.location.contains(q, ignoreCase = true) ||
+            plan.city.contains(q, ignoreCase = true) ||
+            plan.category.contains(q, ignoreCase = true) ||
+            plan.tags.any { it.contains(q, ignoreCase = true) }
+    }
+}
+
+/** Convierte el created_at del backend (ISO con o sin zona) a epoch millis. */
+private fun parseIsoMillis(raw: String): Long? {
+    return try {
+        java.time.OffsetDateTime.parse(raw).toInstant().toEpochMilli()
+    } catch (_: Exception) {
+        try {
+            java.time.LocalDateTime.parse(raw)
+                .toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        } catch (_: Exception) {
+            null
+        }
+    }
 }

@@ -14,6 +14,7 @@ object CityPreferences {
     private const val KEY_FILTER_TYPE = "filter_plan_type"
     private const val KEY_FILTER_CATEGORY = "filter_category"
     private const val KEY_FILTER_FREE = "filter_free_only"
+    private const val KEY_CHAT_SEEN = "chat_seen_at_"
 
     fun getCity(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -57,6 +58,16 @@ object CityPreferences {
 
     fun getFilterFree(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_FILTER_FREE, false)
+
+    /** Marca temporal (epoch ms) de la última vez que se abrió el chat de una quedada. */
+    fun getChatSeen(context: Context, groupId: Int): Long =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong(KEY_CHAT_SEEN + groupId, 0L)
+
+    fun setChatSeen(context: Context, groupId: Int, atMillis: Long) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putLong(KEY_CHAT_SEEN + groupId, atMillis).apply()
+    }
 
     fun setFilters(context: Context, type: String?, category: String?, freeOnly: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()

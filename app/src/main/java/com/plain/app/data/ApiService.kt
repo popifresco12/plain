@@ -81,6 +81,12 @@ interface ApiService {
     @POST("api/business/top-up")
     suspend fun topUpBalance(@Body body: BudgetTopUpRequest): Response<BudgetTopUpResponse>
 
+    /** Recarga real con Stripe Checkout (el backend devuelve la URL de pago). */
+    @POST("api/business/create-checkout-session")
+    suspend fun createCheckoutSession(
+        @Query("amount_cents") amountCents: Int
+    ): Response<CheckoutSessionResponse>
+
     // ===== Trip Groups (BlaBlaCar-style) =====
     @GET("api/plans/{planId}/groups")
     suspend fun getPlanGroups(@Path("planId") planId: Int): Response<List<TripGroupResponse>>

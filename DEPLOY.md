@@ -204,3 +204,50 @@ JAVA_HOME=~/jdk17 ANDROID_HOME=~/android ./gradlew assembleRelease
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Se usa para calcular la distancia
   entre ciudades y poder mostrar planes de alrededores sin cambiar de ciudad.
   GeoNames no patrocina ni respalda este proyecto.
+
+---
+
+## Despliegue del backend (estado real: **Render**, no Railway)
+
+Servicio: `plain-api` → https://plain-api.onrender.com
+ID de servicio: `srv-da60sfajobas7386h0l0`
+
+> ⚠️ El auto-deploy de Render figura como activo (`autoDeploy=yes`) pero **dejó de
+> dispararse sin avisar**: producción llegó a estar días por detrás de `main`.
+> Por eso hay un workflow que despliega y **verifica el commit servido**.
+
+### Automático (recomendado)
+
+`.github/workflows/deploy.yml` despliega al hacer push a `main` cuando cambia `backend/`
+y después comprueba que `/health` devuelve ese mismo commit. Para que funcione hay que
+crear dos secretos en **Settings → Secrets and variables → Actions**:
+
+| Secreto | Valor |
+|---|---|
+| `RENDER_API_KEY` | Render → Account Settings → API Keys |
+| `RENDER_SERVICE_ID` | `srv-da60sfajobas7386h0l0` |
+
+Sin ellos, el workflow no falla: avisa con un `warning` y se salta el deploy.
+
+### Manual
+
+```bash
+# 1. Comprobar si producción está al día (debe coincidir con tu commit)
+curl -s https://plain-api.onrender.com/health
+
+# 2. Lanzar el deploy
+curl -s -X POST -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+  -d '{"clearCache":"do_not_clear"}' \
+  https://api.render.com/v1/services/srv-da60sfajobas7386h0l0/deploys
+
+# 3. Seguir el estado hasta "live"
+curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+  "https://api.render.com/v1/services/srv-da60sfajobas7386h0l0/deploys?limit=1"
+```
+
+### Pagos (Stripe)
+
+`STRIPE_SECRET_KEY` **no está configurada** en producción: la recarga real desde el
+panel de empresa necesita esa variable y `STRIPE_WEBHOOK_SECRET` en Render. Mientras
+no estén, el botón de pago devolverá *"Stripe no configurado"* y solo funciona el
+saldo de pruebas (`/api/business/top-up`).

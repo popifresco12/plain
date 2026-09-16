@@ -8,29 +8,15 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 import geo
-from database import Base, get_db
+from conftest import TestingSessionLocal   # BD e override comunes
 from main import app
 from models import Plan, User
 
-TEST_DATABASE_URL = "sqlite:///./test_radius.db"
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
-TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+TestSessionLocal = TestingSessionLocal
+client = TestClient(app)
 
-
-def override_get_db():
-    db = TestSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-Base.metadata.create_all(bind=test_engine)
 client = TestClient(app)
 
 
