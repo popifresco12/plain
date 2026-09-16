@@ -31,3 +31,7 @@ plain-release-key.jks
 # Env
 .env
 *.env.local
+
+# entorno local de tests del backend
+backend/.venv/
+backend/*.db

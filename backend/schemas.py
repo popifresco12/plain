@@ -79,6 +79,8 @@ class PlanResponse(BaseModel):
     available_until: Optional[date] = None
     recurring: Optional[str] = None
     is_available_now: bool = True  # Computed: active AND within dates
+    # Distancia en km a la ciudad del usuario (solo con radius_km > 0)
+    distance_km: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

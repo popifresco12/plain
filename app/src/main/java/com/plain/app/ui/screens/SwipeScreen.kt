@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.plain.app.data.ApiClient
+import com.plain.app.data.CityPreferences
 import android.content.Context
 import com.plain.app.data.PlanResponse
 import com.plain.app.data.TripGroupCreateRequest
@@ -103,6 +106,10 @@ fun SwipeScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("plain_swipes", Context.MODE_PRIVATE) }
 
+    // Radio de búsqueda en km (0 = solo esta ciudad). Permite ver planes de
+    // ciudades cercanas sin tener que cambiar de ciudad. Persistente.
+    var radiusKm by remember { mutableIntStateOf(CityPreferences.getRadiusKm(context)) }
+
     fun markSwiped(planId: Int) {
         val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
         seen.add(planId.toString())
@@ -114,9 +121,9 @@ fun SwipeScreen(
     // aparte. Si incrementásemos refreshKey dentro de este mismo efecto, Compose
     // cancelaría el efecto a media petición y el catch mostraría
     // "The coroutine scope left the composition" como si fuera un error real.
-    LaunchedEffect(city, refreshKey) {
+    LaunchedEffect(city, refreshKey, radiusKm) {
         try {
-            var resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
+            var resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, onlyAvailable = true)
 
             // Si la ciudad no tiene planes (ciudad nueva), generar planes locales
             // automáticamente (backend idempotente: no duplica si ya existen)
@@ -128,7 +135,7 @@ fun SwipeScreen(
                     if (created > 0) {
                         feedbackText = "✨ ¡Hemos creado $created planes en ${city.lowercase().replaceFirstChar { it.uppercase() }}!"
                     }
-                    resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
+                    resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, onlyAvailable = true)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -175,6 +182,7 @@ fun SwipeScreen(
 
     Scaffold(
         topBar = {
+            Column {
             TopAppBar(
                 title = {
                     Column {
@@ -219,6 +227,15 @@ fun SwipeScreen(
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
+            RadiusSelector(
+                radiusKm = radiusKm,
+                plans = plans,
+                onChange = { km ->
+                    radiusKm = km
+                    CityPreferences.setRadiusKm(context, km)
+                }
+            )
+            }
         },
         bottomBar = {
             Surface(
@@ -404,7 +421,7 @@ fun SwipeScreen(
                             scope.launch {
                                 loading = true
                                 try {
-                                    val resp = ApiClient.service.getPlans(city = city, onlyAvailable = true)
+                                    val resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, onlyAvailable = true)
                                     if (resp.isSuccessful) {
                                         plans = resp.body()?.shuffled() ?: emptyList()
                                         currentIndex = 0
@@ -757,6 +774,59 @@ private fun EmptySwipeState(onReset: () -> Unit) {
             Icon(Icons.Default.Refresh, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Empezar de nuevo")
+        }
+    }
+}
+
+/**
+ * Selector de radio: 0 = solo la ciudad elegida; el resto amplía la búsqueda a
+ * ciudades cercanas (el backend calcula la distancia con las coordenadas del
+ * índice de ciudades). Evita tener que cambiar de ciudad a mano para ver qué
+ * hay alrededor.
+ */
+@Composable
+private fun RadiusSelector(
+    radiusKm: Int,
+    plans: List<PlanResponse>,
+    onChange: (Int) -> Unit
+) {
+    val options = listOf(0 to "Esta ciudad", 25 to "25 km", 50 to "50 km", 100 to "100 km", 250 to "250 km")
+    val nearby = plans.count { (it.distanceKm ?: 0.0) > 0.0 }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            options.forEach { (km, label) ->
+                FilterChip(
+                    selected = radiusKm == km,
+                    onClick = { onChange(km) },
+                    label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
+            }
+        }
+        if (radiusKm > 0) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = if (nearby > 0)
+                    "🌍 $nearby plan${if (nearby == 1) "" else "es"} de ciudades a menos de $radiusKm km"
+                else
+                    "Buscando también en ciudades a menos de $radiusKm km",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

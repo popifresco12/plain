@@ -19,6 +19,8 @@ interface ApiService {
     @GET("api/plans")
     suspend fun getPlans(
         @Query("city") city: String? = null,
+        /** Radio en km: incluye planes de ciudades cercanas (0 = solo esa ciudad) */
+        @Query("radius_km") radiusKm: Int? = null,
         @Query("plan_type") planType: String? = null,
         @Query("category") category: String? = null,
         @Query("only_available") onlyAvailable: Boolean? = null

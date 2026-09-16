@@ -193,3 +193,14 @@ JAVA_HOME=~/jdk17 ANDROID_HOME=~/android ./gradlew assembleRelease
 - [ ] Android APK con `BASE_URL` apuntando al dominio real
 - [ ] Tests: `cd backend && source venv/bin/activate && python -m pytest`
 - [ ] Push a GitHub para despliegue automático (Railway)
+
+
+---
+
+## Datos de terceros
+
+- **Geonames — `cities15000`** (`backend/city_coords.json`): índice de ciudades con coordenadas
+  derivado de [GeoNames](https://www.geonames.org/), licencia
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Se usa para calcular la distancia
+  entre ciudades y poder mostrar planes de alrededores sin cambiar de ciudad.
+  GeoNames no patrocina ni respalda este proyecto.

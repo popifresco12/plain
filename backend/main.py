@@ -17,6 +17,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import geo
 from auth import (
     create_access_token,
     create_business_access_token,
@@ -409,6 +410,7 @@ def plan_is_available(p: Plan) -> bool:
 @app.get("/api/plans", response_model=list[PlanResponse])
 def list_plans(
     city: Optional[str] = None,
+    radius_km: int = 0,
     plan_type: Optional[str] = None,
     category: Optional[str] = None,
     only_available: bool = False,
@@ -416,31 +418,67 @@ def list_plans(
     user: User = Depends(get_current_user),
 ):
     """List plans: free + active sponsored, sorted with user's disliked tags last.
-    Filters by date availability when only_available=True (or always excludes
-    plans whose date window has fully ended)."""
+
+    `radius_km` > 0 amplía el resultado a las ciudades dentro de ese radio
+    (para ver planes de alrededor sin cambiar de ciudad); cada plan devuelve
+    `distance_km`. La ciudad del usuario siempre se incluye.
+    """
+    radius_km = max(0, min(int(radius_km or 0), 2000))
+
     query = db.query(Plan).filter(
         (Plan.is_default == True) | (Plan.created_by != None)  # Free seed + user-created
     )
-    if city:
-        query = query.filter(Plan.city == city.upper())
-    if plan_type:
-        query = query.filter(Plan.plan_type == plan_type.upper())
-    if category:
-        query = query.filter(Plan.category == category)
-
-    free_plans = query.all()
-
-    # Also fetch active sponsored plans for this city
     sponsored_query = db.query(Plan).filter(
         Plan.is_sponsored == True,
         Plan.is_active == True,
     )
-    if city:
-        sponsored_query = sponsored_query.filter(Plan.city == city.upper())
-    sponsored_plans = sponsored_query.all()
 
-    # Combine: free first, then sponsored (interleaved)
-    all_plans = list(free_plans) + list(sponsored_plans)
+    if plan_type:
+        query = query.filter(Plan.plan_type == plan_type.upper())
+        sponsored_query = sponsored_query.filter(Plan.plan_type == plan_type.upper())
+    if category:
+        query = query.filter(Plan.category == category)
+        sponsored_query = sponsored_query.filter(Plan.category == category)
+
+    distances: dict[int, float] = {}
+
+    if city and radius_km > 0:
+        # Resolver la ciudad (desempatando homónimos por el país donde ya hay planes)
+        plan_cities = tuple(c for (c,) in db.query(Plan.city).distinct().all() if c)
+        hint = geo.country_hint(plan_cities)
+        base = geo.resolve(city, hint)
+
+        if base is None:
+            # Ciudad fuera del índice (p. ej. Tamraght): match exacto, como sin radio
+            city_up = city.strip().upper()
+            query = query.filter(func.upper(Plan.city) == city_up)
+            sponsored_query = sponsored_query.filter(func.upper(Plan.city) == city_up)
+            all_plans = list(query.all()) + list(sponsored_query.all())
+        else:
+            lat, lng, _cc = base
+            near = geo.cities_in_radius(lat, lng, radius_km)
+            base_key = geo.norm(city)
+
+            def _distance(plan_city: str) -> Optional[float]:
+                key = geo.norm(plan_city)
+                if key == base_key:
+                    return 0.0
+                hit = near.get(key)
+                return None if hit is None else round(hit[2], 1)
+
+            free_all = query.all()
+            spons_all = sponsored_query.all()
+            free_all = [p for p in free_all if _distance(p.city) is not None]
+            spons_all = [p for p in spons_all if _distance(p.city) is not None]
+            for p in list(free_all) + list(spons_all):
+                distances[p.id] = _distance(p.city)
+            all_plans = sorted(free_all, key=lambda p: distances[p.id]) + sorted(spons_all, key=lambda p: distances[p.id])
+    else:
+        if city:
+            city_up = city.strip().upper()
+            query = query.filter(func.upper(Plan.city) == city_up)
+            sponsored_query = sponsored_query.filter(func.upper(Plan.city) == city_up)
+        all_plans = list(query.all()) + list(sponsored_query.all())
 
     # Date availability filter
     if only_available:
@@ -459,9 +497,10 @@ def list_plans(
             return sum(1 for t in p_tags if t in disliked_tag_set)
         all_plans.sort(key=plan_score)
 
-    # Annotate availability
+    # Annotate availability + distance
     for p in all_plans:
         p.is_available_now = plan_is_available(p)
+        p.distance_km = distances.get(p.id)
 
     return all_plans
 

@@ -46,7 +46,9 @@ data class PlanResponse(
     @SerializedName("available_from") val availableFrom: String? = null,
     @SerializedName("available_until") val availableUntil: String? = null,
     val recurring: String? = null,
-    @SerializedName("is_available_now") val isAvailableNow: Boolean = true
+    @SerializedName("is_available_now") val isAvailableNow: Boolean = true,
+    /** km hasta la ciudad elegida (solo si se pidió con radio) */
+    @SerializedName("distance_km") val distanceKm: Double? = null
 )
 
 data class PlanCreateRequest(
@@ -171,7 +173,8 @@ data class FavoritePlan(
     @SerializedName("available_from") val availableFrom: String? = null,
     @SerializedName("available_until") val availableUntil: String? = null,
     val recurring: String? = null,
-    @SerializedName("is_available_now") val isAvailableNow: Boolean = true
+    @SerializedName("is_available_now") val isAvailableNow: Boolean = true,
+    @SerializedName("distance_km") val distanceKm: Double? = null
 )
 
 data class FavoriteResponse(

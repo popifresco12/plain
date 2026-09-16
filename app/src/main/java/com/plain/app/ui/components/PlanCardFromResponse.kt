@@ -58,15 +58,17 @@ fun PlanCardFromResponse(
             .offset(x = offsetX.dp)
             .rotate(rotation)
             .scale(scale),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         border = if (dragProgress > 0.02f) {
             BorderStroke(
                 width = (2f + dragProgress * 3f).dp,
                 color = accent.copy(alpha = dragProgress * 0.95f)
             )
-        } else null,
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        },
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 10.dp + (dragProgress * 12f).dp
+            defaultElevation = 6.dp + (dragProgress * 14f).dp
         ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -76,7 +78,7 @@ fun PlanCardFromResponse(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(250.dp)
+                    .height(262.dp)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -133,7 +135,7 @@ fun PlanCardFromResponse(
                             }
                             .background(
                                 color = accent.copy(alpha = 0.35f + dragProgress * 0.65f),
-                                shape = RoundedCornerShape(10.dp)
+                                shape = MaterialTheme.shapes.extraSmall
                             )
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .rotate(if (offsetX > 0) 12f else -12f),
@@ -185,6 +187,14 @@ fun PlanCardFromResponse(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Distancia a la ciudad elegida (aparece solo al ampliar el radio)
+                    val dist = plan.distanceKm
+                    if (dist != null && dist > 0.5) {
+                        InfoPill(
+                            "📍 ${dist.toInt()} km · ${plan.city.lowercase().replaceFirstChar { it.uppercase() }}",
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    }
                     InfoPill("💰 ${plan.price}", MaterialTheme.colorScheme.primary)
                     InfoPill("⏱ ${plan.duration}", MaterialTheme.colorScheme.secondary)
                     val (pEmoji, pLabel, pColor) = when (plan.planType) {
@@ -235,7 +245,7 @@ fun PlanCardFromResponse(
                 ) {
                     FilledTonalButton(
                         onClick = { addToCalendar(context, plan) },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = MaterialTheme.shapes.small,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
@@ -249,7 +259,7 @@ fun PlanCardFromResponse(
 
                     FilledTonalButton(
                         onClick = { sharePlan(context, plan) },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = MaterialTheme.shapes.small,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
@@ -264,7 +274,7 @@ fun PlanCardFromResponse(
                     // Detalles + quedadas
                     Button(
                         onClick = { onMoreInfo(plan) },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = MaterialTheme.shapes.small,
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
                     ) {
                         Text("Ver más", style = MaterialTheme.typography.labelSmall)
@@ -273,7 +283,7 @@ fun PlanCardFromResponse(
                     if (webhookAvailable) {
                         FilledTonalButton(
                             onClick = { onSendToAgent(plan) },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = MaterialTheme.shapes.small,
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = LikeGreen.copy(alpha = 0.18f)
                             )
@@ -291,8 +301,8 @@ fun PlanCardFromResponse(
 @Composable
 private fun InfoPill(text: String, color: Color) {
     Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = color.copy(alpha = 0.14f)
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.16f)
     ) {
         Text(
             text = text,
