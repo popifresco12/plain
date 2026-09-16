@@ -297,15 +297,20 @@ def ensure_schema() -> None:
     """
     columnas = [
         ("plans", "image_url", "VARCHAR(500)"),
-        ("users", "email_verified", "BOOLEAN DEFAULT 0"),
+        # OJO: en PostgreSQL "DEFAULT 0" para BOOLEAN es inválido (y el try/except
+        # de abajo lo ocultaba, dejando la columna sin crear y rompiendo el login).
+        ("users", "email_verified", "BOOLEAN DEFAULT FALSE"),
     ]
     with engine.connect() as conn:
         for tabla, columna, tipo in columnas:
             try:
                 conn.exec_driver_sql(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
                 print(f"🛠️  +{tabla}.{columna}")
-            except Exception:
-                pass  # ya existe
+            except Exception as e:
+                if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+                    pass  # ya existe: correcto
+                else:
+                    print(f"⚠️ no pude añadir {tabla}.{columna}: {e}")
         conn.commit()
 
 
@@ -455,7 +460,7 @@ def update_profile(
         "id": user.id,
         "username": user.username,
         "email": user.email,
-        "email_verified": bool(user.email_verified),
+        "email_verified": bool(getattr(user, "email_verified", False)),
         "created_at": user.created_at,
     }
 
@@ -464,7 +469,7 @@ def update_profile(
 def my_status(user: User = Depends(get_current_user)):
     """Estado de la cuenta (si la verificación de email está activa, informa)."""
     return {
-        "email_verified": bool(user.email_verified),
+        "email_verified": bool(getattr(user, "email_verified", False)),
         "requires_verification": REQUIRE_EMAIL_VERIFICATION,
         "max_plans": MAX_PLANS_PER_USER,
     }
@@ -655,7 +660,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
-    if REQUIRE_EMAIL_VERIFICATION and not user.email_verified:
+    if REQUIRE_EMAIL_VERIFICATION and not getattr(user, "email_verified", False):
         raise HTTPException(
             status_code=403,
             detail="Verifica tu email antes de entrar (revisa tu correo o pide otro código)",
