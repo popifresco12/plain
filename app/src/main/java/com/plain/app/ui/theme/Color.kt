@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
  */
 
 // ── Light ────────────────────────────────────────────────────────────────────
-val LightPrimary = Color(0xFFF76B15)                 // orange-9  sólido de marca
+val LightPrimary = Color(0xFFCC4E00)                 // orange-11 (4.51:1 con blanco; el -9 se quedaba en 2.97:1)
 val LightOnPrimary = Color(0xFFFFFFFF)
 val LightPrimaryContainer = Color(0xFFFFDFB5)        // orange-4  contenedor
 val LightOnPrimaryContainer = Color(0xFF582D1D)     // orange-12 texto sobre él
@@ -39,16 +39,16 @@ val LightSurface = Color(0xFFFFFFFF)                       // tarjetas en blanco
 val LightOnSurface = Color(0xFF21201C)
 val LightSurfaceVariant = Color(0xFFE9E8E6)            // chips, campos
 val LightOnSurfaceVariant = Color(0xFF63635E)         // texto secundario
-val LightError = Color(0xFFE5484D)                      // red-9
+val LightError = Color(0xFFCE2C31)                      // red-11 (4.95:1 como texto; el -9 daba 3.72:1)
 val LightOnError = Color(0xFFFFFFFF)
 val LightErrorContainer = Color(0xFFFFDBDC)             // red-4
 val LightOnErrorContainer = Color(0xFF641723)          // red-12
-val LightOutline = Color(0xFFCFCECA)                   // sand-7 bordes
-val LightOutlineVariant = Color(0xFFDAD9D6)            // sand-6 separadores suaves
+val LightOutline = Color(0xFF8D8D86)                   // sand-9 bordes de componentes (3.17:1; el -7 daba 1.49:1)
+val LightOutlineVariant = Color(0xFFDAD9D6)            // sand-6 separadores decorativos
 
 // ── Dark ─────────────────────────────────────────────────────────────────────
-val DarkPrimary = Color(0xFFF76B15)
-val DarkOnPrimary = Color(0xFFFFFFFF)
+val DarkPrimary = Color(0xFFFFA057)                 // orange-dark-11: naranja claro para destacar en oscuro
+val DarkOnPrimary = Color(0xFF111110)                // texto oscuro sobre el naranja claro
 val DarkPrimaryContainer = Color(0xFF331E0B)
 val DarkOnPrimaryContainer = Color(0xFFFFE0C2)
 
@@ -67,17 +67,17 @@ val DarkSurface = Color(0xFF191918)
 val DarkOnSurface = Color(0xFFEEEEEC)
 val DarkSurfaceVariant = Color(0xFF222221)
 val DarkOnSurfaceVariant = Color(0xFFB5B3AD)
-val DarkError = Color(0xFFE5484D)
-val DarkOnError = Color(0xFFFFFFFF)
+val DarkError = Color(0xFFFF9592)                   // red-dark-11
+val DarkOnError = Color(0xFF111110)
 val DarkErrorContainer = Color(0xFF3B1219)
 val DarkOnErrorContainer = Color(0xFFFFD1D9)
-val DarkOutline = Color(0xFF494844)
+val DarkOutline = Color(0xFF62605B)
 val DarkOutlineVariant = Color(0xFF3B3A37)
 
 // ── Estados del swipe ────────────────────────────────────────────────────────
-val LikeGreen = Color(0xFF30A46C)                     // green-9
+val LikeGreen = Color(0xFF218358)                     // green-11 (legible como texto en claro)
 val LikeGreenDark = Color(0xFF3DD68C)            // green-11 (más luminoso en oscuro)
-val NopeRed = Color(0xFFE5484D)                         // red-9
+val NopeRed = Color(0xFFCE2C31)                        // red-11
 val NopeRedDark = Color(0xFFFF9592)                // red-11
 val SponsoredGold = Color(0xFFAB6400)                // amber-11 (legible como texto)
 val SponsoredGoldDark = Color(0xFFFFCA16)
