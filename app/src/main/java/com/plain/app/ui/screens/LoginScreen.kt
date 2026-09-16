@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onGoToRegister: () -> Unit,
-    onGoToBusiness: () -> Unit
+    onGoToBusiness: () -> Unit,
+    onGoToForgot: () -> Unit = {}
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -138,6 +139,14 @@ fun LoginScreen(
             Text(
                 text = "¿No tienes cuenta? Regístrate",
                 modifier = Modifier.clickable { onGoToRegister() },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "¿Olvidaste tu contraseña?",
+                modifier = Modifier.clickable { onGoToForgot() },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center

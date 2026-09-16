@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.plain.app.data.ApiClient
+import com.plain.app.data.Analytics
+import com.plain.app.data.SwipeHistory
 import com.plain.app.data.CityPreferences
 import com.plain.app.data.LocationHelper
 import android.content.Context
@@ -69,6 +71,7 @@ fun SwipeScreen(
     var plans by remember { mutableStateOf<List<PlanResponse>>(emptyList()) }
     var currentIndex by remember { mutableIntStateOf(0) }
     var offsetX by remember { mutableFloatStateOf(0f) }
+    val reportScope = androidx.compose.runtime.rememberCoroutineScope()
     var isAnimating by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -616,6 +619,9 @@ fun SwipeScreen(
                                 val currentPlan = topCard
 
                                 if (offsetX > 0 && currentPlan != null) {
+                                    // Analítica e historial: antes no quedaba rastro de lo visto
+                                    Analytics.track("like", currentPlan.id, currentPlan.city)
+                                    SwipeHistory.add(currentPlan, liked = true)
                                     // SWIPE RIGHT — Save to favorites
                                     scope.launch {
                                         try {
@@ -631,6 +637,8 @@ fun SwipeScreen(
                                         }
                                     }
                                 } else if (offsetX < 0 && currentPlan != null) {
+                                    Analytics.track("dislike", currentPlan.id, currentPlan.city)
+                                    SwipeHistory.add(currentPlan, liked = false)
                                     // SWIPE LEFT — Record disliked tags
                                     if (currentPlan.tags.isNotEmpty()) {
                                         scope.launch {
@@ -768,6 +776,23 @@ fun SwipeScreen(
                         Column { Text("📍 ${plan.location}") }
                         Column { Text("💰 ${plan.price}") }
                         Column { Text("⏱ ${plan.duration}") }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    // Reportar: hasta ahora no había forma de avisar de un plan malo
+                    TextButton(onClick = {
+                        val idParaReportar = plan.id
+                        showInfoDialog = null
+                        reportScope.launch {
+                            try {
+                                ApiClient.service.reportPlan(
+                                    idParaReportar,
+                                    com.plain.app.data.PlanReportRequest(reason = "inapropiado")
+                                )
+                                feedbackText = "Gracias, revisaremos este plan"
+                            } catch (_: Exception) {}
+                        }
+                    }) {
+                        Text("🚩 Reportar este plan", color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.height(8.dp))
                     Text("Para: ${plan.planType.lowercase().replaceFirstChar { it.uppercase() }}", color = MaterialTheme.colorScheme.primary)

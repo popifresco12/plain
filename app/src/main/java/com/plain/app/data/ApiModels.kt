@@ -34,6 +34,7 @@ data class PlanResponse(
     val category: String,
     val city: String,
     val emoji: String,
+    @SerializedName("image_url") val imageUrl: String? = null,
     val tags: List<String> = emptyList(),
     @SerializedName("is_default") val isDefault: Boolean,
     @SerializedName("is_sponsored") val isSponsored: Boolean = false,
@@ -62,6 +63,7 @@ data class PlanCreateRequest(
     val category: String,
     val city: String,
     val emoji: String,
+    @SerializedName("image_url") val imageUrl: String? = null,
     @SerializedName("available_from") val availableFrom: String? = null,
     @SerializedName("available_until") val availableUntil: String? = null,
     val recurring: String? = null
@@ -282,3 +284,67 @@ data class BootstrapResult(
     val city: String,
     val created: Int = 0
 )
+
+// === Fotos de planes (búsqueda online, sin subida de ficheros) ===
+
+data class ImageSearchResult(
+    val title: String,
+    val url: String,
+    val thumb: String = "",
+    val license: String = "",
+    val attribution: String = ""
+)
+
+// === Perfil ===
+
+data class ProfileUpdateRequest(
+    val email: String? = null,
+    val username: String? = null
+)
+
+data class ProfileResponse(
+    val id: Int,
+    val username: String,
+    val email: String,
+    @SerializedName("email_verified") val emailVerified: Boolean = false
+)
+
+data class MeStatus(
+    @SerializedName("email_verified") val emailVerified: Boolean = false,
+    @SerializedName("requires_verification") val requiresVerification: Boolean = false,
+    @SerializedName("max_plans") val maxPlans: Int = 25
+)
+
+// === Recuperar contraseña ===
+
+data class ForgotPasswordRequest(val email: String)
+
+data class ForgotPasswordResponse(
+    val status: String = "",
+    val sent: Boolean = false,
+    @SerializedName("dev_code") val devCode: String? = null,
+    val warning: String? = null
+)
+
+data class ResetPasswordRequest(
+    val email: String,
+    val code: String,
+    @SerializedName("new_password") val newPassword: String
+)
+
+// === Moderación ===
+
+data class PlanReportRequest(
+    val reason: String = "otro",
+    val comment: String? = null
+)
+
+// === Analítica de producto ===
+
+data class EventItem(
+    @SerializedName("plan_id") val planId: Int? = null,
+    val event: String,
+    val city: String? = null
+)
+
+data class EventsRequest(val events: List<EventItem>)

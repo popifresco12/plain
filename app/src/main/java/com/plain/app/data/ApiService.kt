@@ -87,6 +87,38 @@ interface ApiService {
         @Query("amount_cents") amountCents: Int
     ): Response<CheckoutSessionResponse>
 
+    // ===== Fotos de planes =====
+
+    /** Busca fotos Creative Commons para el plan (sin subir ficheros). */
+    @GET("api/images/search")
+    suspend fun searchImages(@Query("q") q: String): Response<List<ImageSearchResult>>
+
+    // ===== Perfil =====
+
+    @PUT("api/me")
+    suspend fun updateProfile(@Body body: ProfileUpdateRequest): Response<ProfileResponse>
+
+    @GET("api/me/status")
+    suspend fun getMeStatus(): Response<MeStatus>
+
+    // ===== Recuperar contraseña =====
+
+    @POST("api/password/forgot")
+    suspend fun forgotPassword(@Body body: ForgotPasswordRequest): Response<ForgotPasswordResponse>
+
+    @POST("api/password/reset")
+    suspend fun resetPassword(@Body body: ResetPasswordRequest): Response<FavoriteActionResponse>
+
+    // ===== Moderación =====
+
+    @POST("api/plans/{planId}/report")
+    suspend fun reportPlan(@Path("planId") planId: Int, @Body body: PlanReportRequest): Response<FavoriteActionResponse>
+
+    // ===== Analítica de producto =====
+
+    @POST("api/events")
+    suspend fun sendEvents(@Body body: EventsRequest): Response<FavoriteActionResponse>
+
     // ===== Trip Groups (BlaBlaCar-style) =====
     @GET("api/plans/{planId}/groups")
     suspend fun getPlanGroups(@Path("planId") planId: Int): Response<List<TripGroupResponse>>

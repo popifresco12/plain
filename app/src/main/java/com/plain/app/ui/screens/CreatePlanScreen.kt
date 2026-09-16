@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plain.app.data.ApiClient
+import com.plain.app.ui.components.ImageSearchDialog
 import com.plain.app.data.PlanCreateRequest
 import kotlinx.coroutines.launch
 
@@ -38,6 +39,8 @@ fun CreatePlanScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var success by remember { mutableStateOf(false) }
     var createAttempt by remember { mutableIntStateOf(0) }
+    var imageUrl by remember { mutableStateOf<String?>(null) }
+    var buscaFoto by remember { mutableStateOf(false) }
 
     // Crear el plan desde un LaunchedEffect (no desde scope.launch en onClick):
     // si la composición sale, la corrutina se cancela limpiamente y nunca escribe
@@ -58,6 +61,7 @@ fun CreatePlanScreen(
                         category = category.trim().ifBlank { "Ocio" },
                         city = city,
                         emoji = "📍",
+                        imageUrl = imageUrl,
                         availableFrom = availableFrom.trim().ifBlank { null },
                         availableUntil = availableUntil.trim().ifBlank { null },
                         recurring = recurring.trim().ifBlank { null }
@@ -281,6 +285,38 @@ fun CreatePlanScreen(
             if (success) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("✅ Plan creado. ¡Ahora otros pueden unirse!", color = MaterialTheme.colorScheme.primary)
+            }
+
+            // Foto del plan: se busca online con licencia libre (o se pega una URL).
+            // No se suben ficheros: el servidor borra el disco en cada despliegue.
+            OutlinedButton(
+                onClick = { buscaFoto = true },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    if (imageUrl == null) "📷 Añadir foto (opcional)" else "📷 Foto elegida ✓",
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (imageUrl != null) {
+                Text(
+                    imageUrl ?: "",
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = { imageUrl = null }) { Text("Quitar foto") }
+            }
+            if (buscaFoto) {
+                ImageSearchDialog(
+                    sugerencia = title.trim().ifBlank { category },
+                    onDismiss = { buscaFoto = false },
+                    onPick = { url ->
+                        imageUrl = url
+                        buscaFoto = false
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))

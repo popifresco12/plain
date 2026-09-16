@@ -12,6 +12,8 @@ import com.plain.app.data.ApiClient
 import com.plain.app.data.AuthManager
 import com.plain.app.data.CityPreferences
 import com.plain.app.data.CrashReporter
+import com.plain.app.data.Analytics
+import com.plain.app.data.SwipeHistory
 import com.plain.app.data.LocationHelper
 import com.plain.app.data.auth.BiometricAuthHelper
 import com.plain.app.ui.screens.BusinessAuthScreen
@@ -23,6 +25,9 @@ import com.plain.app.ui.screens.CreatePlanScreen
 import com.plain.app.ui.screens.GroupChatScreen
 import com.plain.app.ui.screens.FavoritesScreen
 import com.plain.app.ui.screens.LoginScreen
+import com.plain.app.ui.screens.ProfileScreen
+import com.plain.app.ui.screens.ForgotPasswordScreen
+import com.plain.app.ui.screens.HistoryScreen
 import com.plain.app.ui.screens.RegisterScreen
 import com.plain.app.ui.screens.SettingsScreen
 import com.plain.app.ui.screens.SwipeScreen
@@ -39,6 +44,8 @@ class MainActivity : ComponentActivity() {
 
         // Captura de fallos: engancha el handler y manda lo pendiente de la
         // sesión anterior (si la app petó, el informe llega aquí).
+        Analytics.init(this)
+        SwipeHistory.init(this)
         CrashReporter.install(this)
         CrashReporter.flush(this)
         val appContext = applicationContext
@@ -68,6 +75,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onGoToRegister = { navController.navigate("register") },
+                            onGoToForgot = { navController.navigate("forgot_password") },
                             onGoToBusiness = { navController.navigate("business") }
                         )
                     }
@@ -225,12 +233,37 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onBiometricSettings = { navController.navigate("biometric_settings") },
+                            onProfile = { navController.navigate("profile") },
                             onChangeCity = {
                                 navController.navigate("city_picker") {
                                     popUpTo("settings") { inclusive = false }
                                 }
                             }
                         )
+                    }
+
+
+                    // Perfil: ver y corregir la cuenta (antes solo se podía cambiar
+                    // la contraseña al registrarse)
+                    composable("profile") {
+                        ProfileScreen(
+                            onBack = { navController.popBackStack() },
+                            onChangePassword = { navController.navigate("forgot_password") },
+                            onHistory = { navController.navigate("history") }
+                        )
+                    }
+
+                    // Recuperar contraseña (o cambiarla estando dentro)
+                    composable("forgot_password") {
+                        ForgotPasswordScreen(
+                            onBack = { navController.popBackStack() },
+                            onDone = { navController.popBackStack() }
+                        )
+                    }
+
+                    // Historial de descartados y guardados
+                    composable("history") {
+                        HistoryScreen(onBack = { navController.popBackStack() })
                     }
 
                     // Selector de ciudad desde ajustes (cambiar manualmente)

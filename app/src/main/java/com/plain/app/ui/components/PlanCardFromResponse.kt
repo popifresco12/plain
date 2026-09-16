@@ -90,7 +90,17 @@ fun PlanCardFromResponse(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
+                    // Si el plan trae foto, manda la foto; el emoji es el respaldo
+                if (plan.imageUrl.isNullOrBlank()) {
                     Text(text = plan.emoji, fontSize = 88.sp)
+                } else {
+                    coil.compose.AsyncImage(
+                        model = plan.imageUrl,
+                        contentDescription = plan.title,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
                 }
 
                 // Degradado inferior para que el título se lea sobre la foto

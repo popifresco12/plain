@@ -27,6 +27,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
     onBiometricSettings: () -> Unit,
+    onProfile: () -> Unit = {},
     onChangeCity: () -> Unit
 ) {
     var webhookUrl by remember { mutableStateOf("") }
@@ -184,6 +185,16 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onProfile,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("👤 Mi perfil", fontWeight = FontWeight.Medium)
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
