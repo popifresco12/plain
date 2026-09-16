@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -110,6 +112,15 @@ fun SwipeScreen(
     // ciudades cercanas sin tener que cambiar de ciudad. Persistente.
     var radiusKm by remember { mutableIntStateOf(CityPreferences.getRadiusKm(context)) }
 
+    // Filtros del swipe: el backend ya acepta plan_type y category, y con el
+    // radio activo se acumulan planes de varias ciudades, así que hacen falta.
+    var filterType by remember { mutableStateOf(CityPreferences.getFilterType(context)) }
+    var filterCategory by remember { mutableStateOf(CityPreferences.getFilterCategory(context)) }
+    var filterFree by remember { mutableStateOf(CityPreferences.getFilterFree(context)) }
+    var showFilters by remember { mutableStateOf(false) }
+    val filterCount = (if (filterType != null) 1 else 0) +
+        (if (filterCategory != null) 1 else 0) + (if (filterFree) 1 else 0)
+
     fun markSwiped(planId: Int) {
         val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
         seen.add(planId.toString())
@@ -121,9 +132,9 @@ fun SwipeScreen(
     // aparte. Si incrementásemos refreshKey dentro de este mismo efecto, Compose
     // cancelaría el efecto a media petición y el catch mostraría
     // "The coroutine scope left the composition" como si fuera un error real.
-    LaunchedEffect(city, refreshKey, radiusKm) {
+    LaunchedEffect(city, refreshKey, radiusKm, filterType, filterCategory, filterFree) {
         try {
-            var resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, onlyAvailable = true)
+            var resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory, onlyAvailable = true)
 
             // Si la ciudad no tiene planes (ciudad nueva), generar planes locales
             // automáticamente (backend idempotente: no duplica si ya existen)
@@ -135,7 +146,7 @@ fun SwipeScreen(
                     if (created > 0) {
                         feedbackText = "✨ ¡Hemos creado $created planes en ${city.lowercase().replaceFirstChar { it.uppercase() }}!"
                     }
-                    resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, onlyAvailable = true)
+                    resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory, onlyAvailable = true)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -146,7 +157,9 @@ fun SwipeScreen(
             if (resp.isSuccessful) {
                 // Filtrar los que ya se swiparon en esta ciudad (persistente)
                 val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf()) ?: mutableSetOf()
-                val fresh = resp.body()?.filter { it.id.toString() !in seen }?.shuffled() ?: emptyList()
+                var loaded = resp.body()?.filter { it.id.toString() !in seen } ?: emptyList()
+                if (filterFree) loaded = loaded.filter { it.price.trim().startsWith("0") }
+                val fresh = loaded.shuffled()
                 plans = fresh
                 error = if (fresh.isEmpty()) {
                     "Ya has visto todos los planes de esta ciudad. ¡Vuelve mañana para más!"
@@ -179,6 +192,22 @@ fun SwipeScreen(
 
     val topCard = plans.getOrNull(currentIndex)
     val nextCard = plans.getOrNull(currentIndex + 1)
+
+    if (showFilters) {
+        FilterDialog(
+            type = filterType,
+            category = filterCategory,
+            freeOnly = filterFree,
+            onApply = { t, c, f ->
+                filterType = t
+                filterCategory = c
+                filterFree = f
+                CityPreferences.setFilters(context, t, c, f)
+                showFilters = false
+            },
+            onDismiss = { showFilters = false }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -217,6 +246,14 @@ fun SwipeScreen(
                     }
                     IconButton(onClick = onFavorites) {
                         Icon(Icons.Default.Favorite, contentDescription = "Favoritos", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = { showFilters = true }) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = "Filtros",
+                            tint = if (filterCount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Ajustes")
@@ -421,7 +458,7 @@ fun SwipeScreen(
                             scope.launch {
                                 loading = true
                                 try {
-                                    val resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, onlyAvailable = true)
+                                    val resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory, onlyAvailable = true)
                                     if (resp.isSuccessful) {
                                         plans = resp.body()?.shuffled() ?: emptyList()
                                         currentIndex = 0
@@ -829,4 +866,102 @@ private fun RadiusSelector(
             )
         }
     }
+}
+
+/**
+ * Filtros del swipe: con quién, categoría y solo gratis.
+ * Tipo y categoría los filtra el servidor (plan_type / category); «solo gratis»
+ * se filtra en el cliente porque el precio es texto libre ("0€", "5-10€").
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterDialog(
+    type: String?,
+    category: String?,
+    freeOnly: Boolean,
+    onApply: (String?, String?, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var t by remember { mutableStateOf(type) }
+    var c by remember { mutableStateOf(category) }
+    var f by remember { mutableStateOf(freeOnly) }
+
+    val types = listOf(null to "Todos", "SOLO" to "Solo", "PAREJA" to "Pareja", "AMBOS" to "Amigos")
+    val categories = listOf(
+        null, "Cultura", "Naturaleza", "Gastronomía", "Compras", "Ocio", "Deporte", "Música"
+    )
+    val chipColors = FilterChipDefaults.filterChipColors(
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Filtrar planes", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column {
+                    Text(
+                        "¿Con quién?",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        types.forEach { (value, label) ->
+                            FilterChip(
+                                selected = t == value,
+                                onClick = { t = value },
+                                label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                                colors = chipColors
+                            )
+                        }
+                    }
+                }
+                Column {
+                    Text(
+                        "Categoría",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categories.forEach { value ->
+                            FilterChip(
+                                selected = c == value,
+                                onClick = { c = value },
+                                label = {
+                                    Text(value ?: "Todas", style = MaterialTheme.typography.labelMedium)
+                                },
+                                colors = chipColors
+                            )
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Solo gratis", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Planes a 0€",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = f, onCheckedChange = { f = it })
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onApply(t, c, f) }) { Text("Aplicar") } },
+        dismissButton = {
+            TextButton(onClick = { t = null; c = null; f = false }) { Text("Limpiar") }
+        }
+    )
 }

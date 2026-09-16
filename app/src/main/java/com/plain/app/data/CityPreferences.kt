@@ -11,6 +11,9 @@ object CityPreferences {
     private const val KEY_CITY = "selected_city"
     private const val KEY_GPS_DETECTED = "gps_city_detected"
     private const val KEY_RADIUS = "search_radius_km"
+    private const val KEY_FILTER_TYPE = "filter_plan_type"
+    private const val KEY_FILTER_CATEGORY = "filter_category"
+    private const val KEY_FILTER_FREE = "filter_free_only"
 
     fun getCity(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -42,5 +45,24 @@ object CityPreferences {
 
     fun setRadiusKm(context: Context, km: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY_RADIUS, km).apply()
+    }
+
+    // ── Filtros del swipe (null = sin filtro) ──
+
+    fun getFilterType(context: Context): String? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_FILTER_TYPE, null)
+
+    fun getFilterCategory(context: Context): String? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_FILTER_CATEGORY, null)
+
+    fun getFilterFree(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_FILTER_FREE, false)
+
+    fun setFilters(context: Context, type: String?, category: String?, freeOnly: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_FILTER_TYPE, type)
+            .putString(KEY_FILTER_CATEGORY, category)
+            .putBoolean(KEY_FILTER_FREE, freeOnly)
+            .apply()
     }
 }
