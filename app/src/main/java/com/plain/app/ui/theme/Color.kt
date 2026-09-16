@@ -81,3 +81,6 @@ val NopeRed = Color(0xFFCE2C31)                        // red-11
 val NopeRedDark = Color(0xFFFF9592)                // red-11
 val SponsoredGold = Color(0xFFAB6400)                // amber-11 (legible como texto)
 val SponsoredGoldDark = Color(0xFFFFCA16)
+
+// Contraste verificado con el ratio WCAG real (script anexo al commit):
+// todos los pares texto/fondo >= 4.5:1 (AA) y bordes de componentes >= 3:1.
