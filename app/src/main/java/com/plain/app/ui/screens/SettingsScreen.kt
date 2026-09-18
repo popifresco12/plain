@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,10 +57,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ajustes", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.cd_settings), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -73,7 +75,7 @@ fun SettingsScreen(
         ) {
             // Webhook section
             Text(
-                text = "🔗 Tu Agente Personal",
+                text = stringResource(R.string.set_your_agent),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -81,7 +83,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Conecta tu agente de IA (Hermes, ChatGPT, Claude, Grok...) para que al hacer swipe right reciba el plan y lo ejecute automáticamente.",
+                text = stringResource(R.string.set_agent_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -91,7 +93,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = webhookUrl,
                 onValueChange = { webhookUrl = it; saved = false },
-                label = { Text("URL del Webhook") },
+                label = { Text(stringResource(R.string.set_webhook_url)) },
                 placeholder = { Text("https://tu-agente.com/webhook") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -104,7 +106,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it; saved = false },
-                label = { Text("API Key (opcional)") },
+                label = { Text(stringResource(R.string.set_api_key)) },
                 placeholder = { Text("sk-...") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
@@ -156,13 +158,13 @@ fun SettingsScreen(
                 if (saving) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                 } else {
-                    Text("Guardar Webhook")
+                    Text(stringResource(R.string.set_save_webhook))
                 }
             }
 
             if (saved) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("✅ Webhook guardado correctamente", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.set_webhook_saved), color = MaterialTheme.colorScheme.primary)
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -173,7 +175,7 @@ fun SettingsScreen(
 
             // City section
             Text(
-                text = "📍 Ciudad",
+                text = stringResource(R.string.set_city),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -181,7 +183,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "La app detecta tu ciudad por ubicación automáticamente. Cámbiala aquí si quieres explorar otra.",
+                text = stringResource(R.string.set_city_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -193,7 +195,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("👤 Mi perfil", fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.set_my_profile), fontWeight = FontWeight.Medium)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -203,7 +205,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Cambiar ciudad", fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.common_change_city), fontWeight = FontWeight.Medium)
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -214,7 +216,7 @@ fun SettingsScreen(
 
             // Logout
             Text(
-                text = "Cuenta",
+                text = stringResource(R.string.set_account),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -233,7 +235,7 @@ fun SettingsScreen(
                     contentColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("Cerrar sesión")
+                Text(stringResource(R.string.set_logout))
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -244,7 +246,7 @@ fun SettingsScreen(
 
             // Biometric section
             Text(
-                text = "Seguridad",
+                text = stringResource(R.string.set_security),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -261,10 +263,10 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.Fingerprint, contentDescription = "Biometría", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Filled.Fingerprint, contentDescription = stringResource(R.string.set_biometrics), tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Autenticación biométrica",
+                        text = stringResource(R.string.set_biometric_auth),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )

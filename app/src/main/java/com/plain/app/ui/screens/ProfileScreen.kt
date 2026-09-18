@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -59,10 +61,10 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mi perfil", fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.profile_title), fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 }
             )
@@ -83,7 +85,7 @@ fun ProfileScreen(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text("Nombre de usuario", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            Text(stringResource(R.string.profile_username), fontWeight = FontWeight.Medium, fontSize = 14.sp)
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
@@ -91,7 +93,7 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text("Email", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            Text(stringResource(R.string.email), fontWeight = FontWeight.Medium, fontSize = 14.sp)
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },

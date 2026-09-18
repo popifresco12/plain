@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +30,13 @@ fun BiometricUnlockScreen(
     val scope = rememberCoroutineScope()
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
 
+    // stringResource() solo se puede llamar en composición, y performAuth() es una
+    // función normal: los textos se resuelven aquí y la función los recibe hechos.
+    val txtUnlock = stringResource(R.string.bio_unlock)
+    val txtRequired = stringResource(R.string.bio_required)
+    val txtUse = stringResource(R.string.bio_use)
+    val txtFailed = stringResource(R.string.bio_failed)
+
     // Authenticate function
     fun performAuth() {
         if (isAuthenticating) return
@@ -36,15 +45,15 @@ fun BiometricUnlockScreen(
         scope.launch {
             val success = biometricHelper.authenticate(
                 owner = lifecycleOwner,
-                title = "Desbloquear PLAIN",
-                subtitle = "Autenticación requerida",
-                description = "Usa tu biometría para acceder a la app"
+                title = txtUnlock,
+                subtitle = txtRequired,
+                description = txtUse
             )
             isAuthenticating = false
             if (success) {
                 onAuthenticated()
             } else {
-                errorMessage = "Autenticación fallida o cancelada"
+                errorMessage = txtFailed
             }
         }
     }
@@ -64,7 +73,7 @@ fun BiometricUnlockScreen(
         ) {
             Icon(
                 imageVector = Icons.Filled.Fingerprint,
-                contentDescription = "Biometría",
+                contentDescription = stringResource(R.string.set_biometrics),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(80.dp)
             )
@@ -99,14 +108,14 @@ fun BiometricUnlockScreen(
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Icon(Icons.Filled.Fingerprint, contentDescription = "")
-                            Text("Intentar de nuevo", fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.bio_try_again), fontWeight = FontWeight.Medium)
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     TextButton(
                         onClick = onCancel
                     ) {
-                        Text("Cancelar")
+                        Text(stringResource(R.string.common_cancel))
                     }
                 }
             } else {

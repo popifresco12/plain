@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -60,10 +62,10 @@ fun FavoritesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("❤️ Favoritos", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.fav_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -80,7 +82,7 @@ fun FavoritesScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(16.dp))
-                        Text("Cargando favoritos...")
+                        Text(stringResource(R.string.fav_loading))
                     }
                 }
                 error != null -> {
@@ -90,7 +92,7 @@ fun FavoritesScreen(
                         Text(error!!, textAlign = TextAlign.Center)
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = { loadFavorites() }) {
-                            Text("Reintentar")
+                            Text(stringResource(R.string.common_retry))
                         }
                     }
                 }
@@ -99,13 +101,13 @@ fun FavoritesScreen(
                         Text("💔", fontSize = 64.sp)
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "No tienes favoritos aún",
+                            stringResource(R.string.fav_empty),
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Desliza a la derecha en un plan para guardarlo",
+                            stringResource(R.string.fav_swipe_hint),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -178,7 +180,7 @@ private fun FavoriteCard(
                 IconButton(onClick = onRemove) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Quitar de favoritos",
+                        contentDescription = stringResource(R.string.fav_remove),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -202,7 +204,7 @@ private fun FavoriteCard(
                 ) {
                     Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Calendario", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.swipe_calendar), style = MaterialTheme.typography.labelSmall)
                 }
                 FilledTonalButton(
                     onClick = { sharePlan(context, plan) },
@@ -215,7 +217,7 @@ private fun FavoriteCard(
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Compartir", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.swipe_share), style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

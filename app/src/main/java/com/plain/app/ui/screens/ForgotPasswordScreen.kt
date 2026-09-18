@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -39,10 +41,10 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onDone: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Recuperar contraseña", fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.forgot_title), fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 }
             )
@@ -66,7 +68,7 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onDone: () -> Unit) {
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email") },
+                label = { Text(stringResource(R.string.email)) },
                 singleLine = true,
                 enabled = paso == 1,
                 modifier = Modifier.fillMaxWidth()
@@ -76,14 +78,14 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onDone: () -> Unit) {
                 OutlinedTextField(
                     value = codigo,
                     onValueChange = { codigo = it.uppercase() },
-                    label = { Text("Código (6 caracteres)") },
+                    label = { Text(stringResource(R.string.forgot_code)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = nueva,
                     onValueChange = { nueva = it },
-                    label = { Text("Nueva contraseña") },
+                    label = { Text(stringResource(R.string.forgot_new_password)) },
                     singleLine = true,
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(

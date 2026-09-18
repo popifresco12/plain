@@ -1,5 +1,8 @@
 package com.plain.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.plain.app.R
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -56,7 +59,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Inicia sesión",
+                text = stringResource(R.string.login_title),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -66,7 +69,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Usuario") },
+                label = { Text(stringResource(R.string.login_user)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -77,7 +80,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Contraseña") },
+                label = { Text(stringResource(R.string.login_password)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -130,14 +133,14 @@ fun LoginScreen(
                 if (loading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                 } else {
-                    Text("Entrar", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.login_submit), style = MaterialTheme.typography.titleMedium)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "¿No tienes cuenta? Regístrate",
+                text = stringResource(R.string.login_no_account),
                 modifier = Modifier.clickable { onGoToRegister() },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
@@ -145,7 +148,7 @@ fun LoginScreen(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "¿Olvidaste tu contraseña?",
+                text = stringResource(R.string.login_forgot),
                 modifier = Modifier.clickable { onGoToForgot() },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
@@ -155,7 +158,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "¿Eres una empresa? Panel Business",
+                text = stringResource(R.string.login_business),
                 modifier = Modifier.clickable { onGoToBusiness() },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.tertiary,

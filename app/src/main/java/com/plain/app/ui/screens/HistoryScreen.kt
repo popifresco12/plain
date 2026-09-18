@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,10 +42,10 @@ fun HistoryScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Historial", fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.hist_title), fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
@@ -52,7 +54,7 @@ fun HistoryScreen(onBack: () -> Unit) {
                             SwipeHistory.clear()
                             entradas = emptyList()
                         }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Vaciar")
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.hist_clear))
                         }
                     }
                 }
@@ -79,7 +81,7 @@ fun HistoryScreen(onBack: () -> Unit) {
             if (visibles.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "Todavía no has pasado ningún plan.",
+                        stringResource(R.string.hist_empty),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

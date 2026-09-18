@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -107,7 +109,7 @@ fun CreatePlanScreen(
                 title = { Text("Crear plan · $cityLabel", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -121,7 +123,7 @@ fun CreatePlanScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             Text(
-                text = "Comparte un plan para que otros se apunten ✨",
+                text = stringResource(R.string.plan_share_hint),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -132,7 +134,7 @@ fun CreatePlanScreen(
             var catExpanded by remember { mutableStateOf(false) }
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Categoría",
+                    text = stringResource(R.string.swipe_category),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -175,8 +177,8 @@ fun CreatePlanScreen(
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("Título del plan *") },
-                placeholder = { Text("Ej: Quedada para ver el atardecer en el castillo") },
+                label = { Text(stringResource(R.string.plan_title)) },
+                placeholder = { Text(stringResource(R.string.plan_title_hint)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -187,8 +189,8 @@ fun CreatePlanScreen(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Descripción *") },
-                placeholder = { Text("Qué se hace, qué llevar, cómo nos reconocemos...") },
+                label = { Text(stringResource(R.string.plan_desc_label)) },
+                placeholder = { Text(stringResource(R.string.plan_desc_hint)) },
                 minLines = 3,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -199,8 +201,8 @@ fun CreatePlanScreen(
             OutlinedTextField(
                 value = location,
                 onValueChange = { location = it },
-                label = { Text("Lugar *") },
-                placeholder = { Text("Ej: Puerta del castillo") },
+                label = { Text(stringResource(R.string.plan_place)) },
+                placeholder = { Text(stringResource(R.string.plan_place_hint)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -212,7 +214,7 @@ fun CreatePlanScreen(
                 OutlinedTextField(
                     value = price,
                     onValueChange = { price = it },
-                    label = { Text("Precio") },
+                    label = { Text(stringResource(R.string.plan_price)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
@@ -220,7 +222,7 @@ fun CreatePlanScreen(
                 OutlinedTextField(
                     value = duration,
                     onValueChange = { duration = it },
-                    label = { Text("Duración") },
+                    label = { Text(stringResource(R.string.plan_duration)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
@@ -232,7 +234,7 @@ fun CreatePlanScreen(
             OutlinedTextField(
                 value = category,
                 onValueChange = { category = it },
-                label = { Text("Categoría") },
+                label = { Text(stringResource(R.string.swipe_category)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -240,7 +242,7 @@ fun CreatePlanScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text("📅 Disponibilidad (opcional)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.plan_availability), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -248,7 +250,7 @@ fun CreatePlanScreen(
                 OutlinedTextField(
                     value = availableFrom,
                     onValueChange = { availableFrom = it },
-                    label = { Text("Desde (AAAA-MM-DD)") },
+                    label = { Text(stringResource(R.string.plan_from)) },
                     placeholder = { Text("2026-09-04") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
@@ -257,7 +259,7 @@ fun CreatePlanScreen(
                 OutlinedTextField(
                     value = availableUntil,
                     onValueChange = { availableUntil = it },
-                    label = { Text("Hasta (AAAA-MM-DD)") },
+                    label = { Text(stringResource(R.string.plan_until)) },
                     placeholder = { Text("2026-09-08") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
@@ -270,7 +272,7 @@ fun CreatePlanScreen(
             OutlinedTextField(
                 value = recurring,
                 onValueChange = { recurring = it },
-                label = { Text("Días recurrentes (opcional)") },
+                label = { Text(stringResource(R.string.plan_recurring)) },
                 placeholder = { Text("MON,WED,FRI") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -284,7 +286,7 @@ fun CreatePlanScreen(
 
             if (success) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("✅ Plan creado. ¡Ahora otros pueden unirse!", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.plan_created), color = MaterialTheme.colorScheme.primary)
             }
 
             // Foto del plan: se busca online con licencia libre (o se pega una URL).
@@ -306,7 +308,7 @@ fun CreatePlanScreen(
                     maxLines = 1,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                TextButton(onClick = { imageUrl = null }) { Text("Quitar foto") }
+                TextButton(onClick = { imageUrl = null }) { Text(stringResource(R.string.plan_remove_photo)) }
             }
             if (buscaFoto) {
                 ImageSearchDialog(
@@ -339,7 +341,7 @@ fun CreatePlanScreen(
                 if (saving) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                 } else {
-                    Text("Publicar plan", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.plan_publish), fontWeight = FontWeight.Bold)
                 }
             }
 

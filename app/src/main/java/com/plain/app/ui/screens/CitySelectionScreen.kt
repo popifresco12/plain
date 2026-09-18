@@ -1,5 +1,8 @@
 package com.plain.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.plain.app.R
+
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -98,7 +101,7 @@ fun CitySelectionScreen(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "¿Dónde quieres planear?",
+            text = stringResource(R.string.city_question),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -109,7 +112,7 @@ fun CitySelectionScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { if (it.length <= 40) query = it },
-            placeholder = { Text("Busca tu ciudad (ej. Villena, Málaga…)") },
+            placeholder = { Text(stringResource(R.string.city_search)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -121,7 +124,7 @@ fun CitySelectionScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(12.dp))
-                    Text("Cargando ciudades del mundo…", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.city_loading), style = MaterialTheme.typography.bodySmall)
                 }
             }
         } else {
@@ -251,7 +254,7 @@ fun CitySelectionScreen(
             OutlinedTextField(
                 value = customCity,
                 onValueChange = { if (it.length <= 40) customCity = it },
-                placeholder = { Text("¿No está? Escribe tu ciudad") },
+                placeholder = { Text(stringResource(R.string.city_not_found)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
@@ -265,11 +268,11 @@ fun CitySelectionScreen(
                 enabled = customCity.isNotBlank(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Ir")
+                Text(stringResource(R.string.common_go))
             }
         }
         Text(
-            text = "Si aún no hay planes en tu ciudad, los creamos al momento ✨",
+            text = stringResource(R.string.swipe_no_meetups_desc),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
             modifier = Modifier.padding(bottom = 16.dp)

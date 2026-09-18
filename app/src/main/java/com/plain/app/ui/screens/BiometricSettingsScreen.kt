@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,10 +43,10 @@ fun BiometricSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Seguridad biométrica", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.bio_security), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -78,7 +80,7 @@ fun BiometricSettingsScreen(
                     )
                     Column {
                         Text(
-                            text = "Estado",
+                            text = stringResource(R.string.bio_status),
                             style = MaterialTheme.typography.labelLarge,
                             color = if (isAvailable) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
                         )
@@ -101,14 +103,14 @@ fun BiometricSettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
                         Text(
-                            text = "Probar autenticación",
+                            text = stringResource(R.string.bio_test_auth),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Toca para verificar que tu huella/Face ID funciona correctamente",
+                            text = stringResource(R.string.bio_test_hint),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.fillMaxWidth()
@@ -126,7 +128,7 @@ fun BiometricSettingsScreen(
                             ) {
                                 Icon(Icons.Filled.Fingerprint, contentDescription = "", tint = MaterialTheme.colorScheme.onPrimary)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Probar ahora", fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.bio_test_now), fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -143,7 +145,7 @@ fun BiometricSettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "ℹ️ Cómo funciona",
+                        text = stringResource(R.string.bio_how),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer

@@ -1,5 +1,8 @@
 package com.plain.app.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.plain.app.R
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -284,15 +287,15 @@ fun SwipeScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = onCreatePlan) {
-                        Icon(Icons.Default.Add, contentDescription = "Crear plan", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_create_plan), tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = onFavorites) {
-                        Icon(Icons.Default.Favorite, contentDescription = "Favoritos", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Favorite, contentDescription = stringResource(R.string.cd_favorites), tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = {
                         showSearch = !showSearch
@@ -300,7 +303,7 @@ fun SwipeScreen(
                     }) {
                         Icon(
                             Icons.Default.Search,
-                            contentDescription = "Buscar",
+                            contentDescription = stringResource(R.string.cd_search),
                             tint = if (query.isNotBlank()) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -308,13 +311,13 @@ fun SwipeScreen(
                     IconButton(onClick = { showFilters = true }) {
                         Icon(
                             Icons.Default.Tune,
-                            contentDescription = "Filtros",
+                            contentDescription = stringResource(R.string.cd_filters),
                             tint = if (filterCount > 0) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_settings))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -350,7 +353,7 @@ fun SwipeScreen(
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(onClick = { onSwitchCity(detected) }) {
-                            Text("Ver planes")
+                            Text(stringResource(R.string.swipe_view_plans))
                         }
                     }
                 }
@@ -359,13 +362,13 @@ fun SwipeScreen(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Buscar planes, sitios, etiquetas…") },
+                    placeholder = { Text(stringResource(R.string.swipe_search)) },
                     singleLine = true,
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (query.isNotBlank()) {
                             IconButton(onClick = { query = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Limpiar")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_clear))
                             }
                         }
                     },
@@ -459,7 +462,7 @@ fun SwipeScreen(
                             contentColor = Color.White
                         )
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "Me gusta", modifier = Modifier.size(36.dp))
+                        Icon(Icons.Default.Check, contentDescription = stringResource(R.string.cd_like), modifier = Modifier.size(36.dp))
                     }
                 }
             }
@@ -556,10 +559,10 @@ fun SwipeScreen(
                                 error = null
                                 refreshKey++
                             }) {
-                                Text("Reintentar")
+                                Text(stringResource(R.string.common_retry))
                             }
                             OutlinedButton(onClick = { onSettings() }) {
-                                Text("Cambiar ciudad")
+                                Text(stringResource(R.string.common_change_city))
                             }
                         }
                     }
@@ -792,7 +795,7 @@ fun SwipeScreen(
                             } catch (_: Exception) {}
                         }
                     }) {
-                        Text("🚩 Reportar este plan", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.swipe_report), color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(Modifier.height(8.dp))
                     Text("Para: ${plan.planType.lowercase().replaceFirstChar { it.uppercase() }}", color = MaterialTheme.colorScheme.primary)
@@ -804,13 +807,13 @@ fun SwipeScreen(
                     Spacer(Modifier.height(20.dp))
 
                     // --- Trip groups (BlaBlaCar-style) ---
-                    Text("🚗 Quedadas para ir juntos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.swipe_meetups_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
 
                     if (groupsLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp))
                     } else if (groups.isEmpty()) {
-                        Text("Todavía no hay quedadas. ¡Crea la primera!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.swipe_no_meetups), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         groups.forEach { g ->
                             Surface(
@@ -873,10 +876,10 @@ fun SwipeScreen(
                                                 loadGroups(plan.id)
                                             }
                                         }) {
-                                            Text("Unirse", color = MaterialTheme.colorScheme.primary)
+                                            Text(stringResource(R.string.swipe_join), color = MaterialTheme.colorScheme.primary)
                                         }
                                     } else {
-                                        Text("Completo", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                        Text(stringResource(R.string.swipe_complete), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                                     }
                                 }
                             }
@@ -916,7 +919,7 @@ fun SwipeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("+ Crear quedada", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.swipe_create), style = MaterialTheme.typography.labelMedium)
                     }
 
                     Spacer(Modifier.height(16.dp))
@@ -934,7 +937,7 @@ fun SwipeScreen(
                         ) {
                             Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Calendario", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.swipe_calendar), style = MaterialTheme.typography.labelSmall)
                         }
                         OutlinedButton(
                             onClick = { sharePlan(context, plan) },
@@ -943,12 +946,12 @@ fun SwipeScreen(
                         ) {
                             Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Compartir", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.swipe_share), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showInfoDialog = null }) { Text("Cerrar") } }
+            confirmButton = { TextButton(onClick = { showInfoDialog = null }) { Text(stringResource(R.string.common_close)) } }
         )
     }
 }
@@ -958,14 +961,14 @@ private fun EmptySwipeState(onReset: () -> Unit) {
     Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("🎉", fontSize = 64.sp)
         Spacer(Modifier.height(16.dp))
-        Text("¡Ya has visto todos los planes!", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.swipe_empty), style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
-        Text("Vuelve a empezar o elige otra ciudad.", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.swipe_empty_hint), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
         Button(onClick = onReset) {
             Icon(Icons.Default.Refresh, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Empezar de nuevo")
+            Text(stringResource(R.string.swipe_restart))
         }
     }
 }
@@ -1054,12 +1057,12 @@ private fun FilterDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Filtrar planes", style = MaterialTheme.typography.titleLarge) },
+        title = { Text(stringResource(R.string.swipe_filters), style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Column {
                     Text(
-                        "¿Con quién?",
+                        stringResource(R.string.swipe_who),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1080,7 +1083,7 @@ private fun FilterDialog(
                 }
                 Column {
                     Text(
-                        "Categoría",
+                        stringResource(R.string.swipe_category),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1103,9 +1106,9 @@ private fun FilterDialog(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Solo gratis", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.swipe_free_only), style = MaterialTheme.typography.labelLarge)
                         Text(
-                            "Planes a 0€",
+                            stringResource(R.string.swipe_free_plans),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1114,9 +1117,9 @@ private fun FilterDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onApply(t, c, f) }) { Text("Aplicar") } },
+        confirmButton = { TextButton(onClick = { onApply(t, c, f) }) { Text(stringResource(R.string.common_apply)) } },
         dismissButton = {
-            TextButton(onClick = { t = null; c = null; f = false }) { Text("Limpiar") }
+            TextButton(onClick = { t = null; c = null; f = false }) { Text(stringResource(R.string.common_clear)) }
         }
     )
 }
