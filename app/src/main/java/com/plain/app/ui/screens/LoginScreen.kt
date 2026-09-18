@@ -1,7 +1,7 @@
 package com.plain.app.ui.screens
 
-import androidx.compose.ui.res.stringResource
 import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,6 +30,7 @@ fun LoginScreen(
     onGoToBusiness: () -> Unit,
     onGoToForgot: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -102,7 +103,7 @@ fun LoginScreen(
             Button(
                 onClick = {
                     if (username.isBlank() || password.isBlank()) {
-                        error = "Completa todos los campos"
+                        error = context.getString(R.string.err_fill_all)
                         return@Button
                     }
                     loading = true
@@ -115,7 +116,7 @@ fun LoginScreen(
                                 AuthManager.saveUserToken(token.accessToken)
                                 onLoginSuccess()
                             } else {
-                                error = "Usuario o contraseña incorrectos"
+                                error = context.getString(R.string.err_bad_credentials)
                             }
                         } catch (e: Exception) {
                             error = "Error de conexión: ${e.localizedMessage}"

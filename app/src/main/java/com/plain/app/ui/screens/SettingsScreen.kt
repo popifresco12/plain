@@ -32,6 +32,7 @@ fun SettingsScreen(
     onProfile: () -> Unit = {},
     onChangeCity: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var webhookUrl by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -126,7 +127,7 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     if (webhookUrl.isBlank()) {
-                        error = "Introduce una URL de webhook"
+                        error = context.getString(R.string.err_need_webhook)
                         return@Button
                     }
                     saving = true

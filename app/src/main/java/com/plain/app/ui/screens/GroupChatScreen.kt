@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,6 +34,7 @@ fun GroupChatScreen(
     groupTitle: String,
     onBack: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var messages by remember { mutableStateOf<List<GroupMessageResponse>>(emptyList()) }
     var input by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -59,7 +62,7 @@ fun GroupChatScreen(
                 error = "No se pudo enviar (${resp.code()})"
             }
         } catch (_: Exception) {
-            error = "No se pudo enviar: sin conexión"
+            error = context.getString(R.string.err_send_offline)
         }
         pendingText = null
     }
@@ -76,12 +79,12 @@ fun GroupChatScreen(
                     }
                     error = null
                 } else if (resp.code() == 403) {
-                    error = "Únete a la quedada para ver el chat"
+                    error = context.getString(R.string.chat_join_to_see)
                 } else if (messages.isEmpty()) {
                     error = "Error al cargar (${resp.code()})"
                 }
             } catch (_: Exception) {
-                if (messages.isEmpty()) error = "Sin conexión. Reintentando…"
+                if (messages.isEmpty()) error = context.getString(R.string.msg_reconnecting)
             }
             loading = false
             delay(5000)
@@ -107,7 +110,7 @@ fun GroupChatScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -127,7 +130,7 @@ fun GroupChatScreen(
                     OutlinedTextField(
                         value = input,
                         onValueChange = { if (it.length <= 500) input = it },
-                        placeholder = { Text("Escribe un mensaje…") },
+                        placeholder = { Text(stringResource(R.string.chat_hint)) },
                         modifier = Modifier.weight(1f),
                         maxLines = 4,
                         shape = RoundedCornerShape(20.dp)
@@ -142,7 +145,7 @@ fun GroupChatScreen(
                         },
                         enabled = input.isNotBlank() && !sending
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Enviar")
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
                     }
                 }
             }
@@ -170,10 +173,10 @@ fun GroupChatScreen(
                     ) {
                         Text("👋", fontSize = 48.sp)
                         Spacer(Modifier.height(12.dp))
-                        Text("Aún no hay mensajes", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.chat_no_messages), style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Sé el primero en escribir para coordinar la quedada",
+                            stringResource(R.string.chat_be_first),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -110,18 +112,18 @@ fun BusinessDashboardScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { refreshKey++ }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.biz_refresh))
                     }
                     IconButton(onClick = {
                         AuthManager.clearBusinessToken()
                         onLoggedOut()
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Salir")
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.biz_exit))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -197,21 +199,21 @@ fun BusinessDashboardScreen(
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Nueva campaña")
+                                Text(stringResource(R.string.biz_new_campaign))
                             }
                             OutlinedButton(
                                 onClick = { showTopUp = true },
                                 shape = MaterialTheme.shapes.small,
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Recargar")
+                                Text(stringResource(R.string.biz_topup))
                             }
                         }
                     }
 
                     item {
                         Text(
-                            "Tus campañas",
+                            stringResource(R.string.biz_your_campaigns),
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.padding(top = 8.dp)
                         )
@@ -220,7 +222,7 @@ fun BusinessDashboardScreen(
                     if (plans.isEmpty()) {
                         item {
                             Text(
-                                "Aún no has publicado ninguna campaña.",
+                                stringResource(R.string.biz_no_campaigns),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -297,7 +299,7 @@ fun BusinessDashboardScreen(
     toDelete?.let { plan ->
         AlertDialog(
             onDismissRequest = { toDelete = null },
-            title = { Text("¿Eliminar campaña?") },
+            title = { Text(stringResource(R.string.biz_delete_confirm)) },
             text = {
                 Text(
                     "«${plan.title}» dejará de mostrarse. El presupuesto no gastado " +
@@ -305,9 +307,9 @@ fun BusinessDashboardScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { deletePlan(plan) }) { Text("Eliminar") }
+                TextButton(onClick = { deletePlan(plan) }) { Text(stringResource(R.string.biz_delete)) }
             },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text(stringResource(R.string.common_cancel)) } }
         )
     }
 }
@@ -366,7 +368,7 @@ private fun SponsoredPlanRow(plan: SponsoredPlanResponse, busy: Boolean, onDelet
                     )
                 }
                 IconButton(onClick = onDelete, enabled = !busy) {
-                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.biz_delete), tint = MaterialTheme.colorScheme.error)
                 }
             }
             Text(
@@ -421,47 +423,47 @@ private fun CreateCampaignDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nueva campaña") },
+        title = { Text(stringResource(R.string.biz_new_campaign)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 OutlinedTextField(
-                    value = title, onValueChange = { title = it }, label = { Text("Título") },
+                    value = title, onValueChange = { title = it }, label = { Text(stringResource(R.string.biz_title_field)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.small
                 )
                 OutlinedTextField(
                     value = description, onValueChange = { description = it },
-                    label = { Text("Descripción") }, minLines = 2,
+                    label = { Text(stringResource(R.string.biz_description)) }, minLines = 2,
                     modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.small
                 )
                 OutlinedTextField(
-                    value = city, onValueChange = { city = it }, label = { Text("Ciudad") },
+                    value = city, onValueChange = { city = it }, label = { Text(stringResource(R.string.biz_city)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.small,
-                    supportingText = { Text("Aparecerá también en ciudades cercanas (radio del usuario)") }
+                    supportingText = { Text(stringResource(R.string.biz_nearby_note)) }
                 )
                 OutlinedTextField(
-                    value = location, onValueChange = { location = it }, label = { Text("Dónde (dirección)") },
+                    value = location, onValueChange = { location = it }, label = { Text(stringResource(R.string.biz_address)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.small
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
-                        value = price, onValueChange = { price = it }, label = { Text("Precio") },
+                        value = price, onValueChange = { price = it }, label = { Text(stringResource(R.string.biz_price)) },
                         singleLine = true, modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.small
                     )
                     OutlinedTextField(
-                        value = duration, onValueChange = { duration = it }, label = { Text("Duración") },
+                        value = duration, onValueChange = { duration = it }, label = { Text(stringResource(R.string.plan_duration)) },
                         singleLine = true, modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.small
                     )
                     OutlinedTextField(
                         value = emoji, onValueChange = { if (it.length <= 2) emoji = it },
-                        label = { Text("Icono") }, singleLine = true,
+                        label = { Text(stringResource(R.string.biz_icon)) }, singleLine = true,
                         modifier = Modifier.width(84.dp), shape = MaterialTheme.shapes.small
                     )
                 }
 
-                Text("¿Con quién?", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.swipe_who), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     types.forEach { (value, label) ->
                         FilterChip(
@@ -471,7 +473,7 @@ private fun CreateCampaignDialog(
                     }
                 }
 
-                Text("Categoría", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.swipe_category), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -486,14 +488,14 @@ private fun CreateCampaignDialog(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
-                        value = budget, onValueChange = { budget = it }, label = { Text("Presupuesto €") },
+                        value = budget, onValueChange = { budget = it }, label = { Text(stringResource(R.string.biz_budget)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.small
                     )
                     OutlinedTextField(
                         value = costPerLike, onValueChange = { costPerLike = it },
-                        label = { Text("€ por me gusta") }, singleLine = true,
+                        label = { Text(stringResource(R.string.biz_cost_per_like)) }, singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.small
                     )
@@ -556,9 +558,9 @@ private fun CreateCampaignDialog(
                         }
                     }
                 }
-            ) { Text("Publicar") }
+            ) { Text(stringResource(R.string.biz_publish)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } }
     )
 }
 
@@ -575,11 +577,11 @@ private fun TopUpDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Recargar saldo") },
+        title = { Text(stringResource(R.string.biz_topup_balance)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "El saldo se consume según los me gusta que reciben tus campañas.",
+                    stringResource(R.string.biz_balance_note),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -595,10 +597,10 @@ private fun TopUpDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onStripeCheckout(amount * 100) }) { Text("Pagar con tarjeta") }
+            TextButton(onClick = { onStripeCheckout(amount * 100) }) { Text(stringResource(R.string.biz_pay_card)) }
         },
         dismissButton = {
-            TextButton(onClick = { onManualTopUp(amount * 100) }) { Text("Añadir saldo (pruebas)") }
+            TextButton(onClick = { onManualTopUp(amount * 100) }) { Text(stringResource(R.string.biz_add_balance_test)) }
         }
     )
 }

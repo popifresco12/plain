@@ -1,7 +1,7 @@
 package com.plain.app.ui.screens
 
-import androidx.compose.ui.res.stringResource
 import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,6 +29,7 @@ fun RegisterScreen(
     onGoToLogin: () -> Unit,
     onGoToBusiness: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -114,11 +115,11 @@ fun RegisterScreen(
             Button(
                 onClick = {
                     if (username.isBlank() || email.isBlank() || password.isBlank()) {
-                        error = "Completa todos los campos"
+                        error = context.getString(R.string.err_fill_all)
                         return@Button
                     }
                     if (password.length < 4) {
-                        error = "Contraseña muy corta (mín 4 caracteres)"
+                        error = context.getString(R.string.err_password_short)
                         return@Button
                     }
                     loading = true

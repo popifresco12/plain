@@ -151,7 +151,7 @@ fun ProfileScreen(
                                 )
                             )
                             if (r.isSuccessful) {
-                                mensaje = "Guardado ✓"
+                                mensaje = context.getString(R.string.msg_saved)
                             } else {
                                 error = "No se pudo guardar (${r.code()})"
                             }

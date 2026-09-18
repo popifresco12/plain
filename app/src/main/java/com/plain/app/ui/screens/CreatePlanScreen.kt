@@ -27,6 +27,7 @@ fun CreatePlanScreen(
     onBack: () -> Unit,
     onCreated: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
@@ -326,7 +327,7 @@ fun CreatePlanScreen(
             Button(
                 onClick = {
                     if (title.isBlank() || description.isBlank() || location.isBlank()) {
-                        error = "Completa título, descripción y lugar"
+                        error = context.getString(R.string.err_need_title)
                         return@Button
                     }
                     if (!saving) {

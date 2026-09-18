@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForgotPasswordScreen(onBack: () -> Unit, onDone: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var email by remember { mutableStateOf("") }
     var codigo by remember { mutableStateOf("") }
     var nueva by remember { mutableStateOf("") }
@@ -126,7 +127,7 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onDone: () -> Unit) {
                                     ResetPasswordRequest(email.trim(), codigo.trim(), nueva)
                                 )
                                 if (r.isSuccessful) {
-                                    aviso = "Contraseña cambiada ✓"
+                                    aviso = context.getString(R.string.msg_password_changed)
                                     onDone()
                                 } else {
                                     error = "Código incorrecto o caducado (${r.code()})"

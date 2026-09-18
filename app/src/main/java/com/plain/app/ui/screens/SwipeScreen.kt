@@ -1,7 +1,7 @@
 package com.plain.app.ui.screens
 
-import androidx.compose.ui.res.stringResource
 import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -650,7 +650,7 @@ fun SwipeScreen(
                                                     com.plain.app.data.DislikeTagsRequest(currentPlan.tags)
                                                 )
                                                 if (resp.isSuccessful) {
-                                                    feedbackText = "Se mostrarán menos planes similares"
+                                                    feedbackText = context.getString(R.string.msg_fewer_similar)
                                                 }
                                             } catch (_: Exception) {}
                                         }
@@ -791,7 +791,7 @@ fun SwipeScreen(
                                     idParaReportar,
                                     com.plain.app.data.PlanReportRequest(reason = "inapropiado")
                                 )
-                                feedbackText = "Gracias, revisaremos este plan"
+                                feedbackText = context.getString(R.string.msg_reported_thanks)
                             } catch (_: Exception) {}
                         }
                     }) {

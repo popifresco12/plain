@@ -1,5 +1,7 @@
 package com.plain.app.ui.screens
 
+import com.plain.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -34,6 +36,7 @@ fun BusinessAuthScreen(
     onAuthenticated: () -> Unit,
     onBack: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var isRegister by remember { mutableStateOf(false) }
     var company by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -56,7 +59,7 @@ fun BusinessAuthScreen(
         ) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                 }
             }
 
@@ -71,7 +74,7 @@ fun BusinessAuthScreen(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Publica tus planes y llega a gente de tu ciudad y alrededores",
+                text = stringResource(R.string.biz_tagline),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -84,7 +87,7 @@ fun BusinessAuthScreen(
                 FilterChip(
                     selected = !isRegister,
                     onClick = { isRegister = false; error = null },
-                    label = { Text("Iniciar sesión") },
+                    label = { Text(stringResource(R.string.biz_login)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -93,7 +96,7 @@ fun BusinessAuthScreen(
                 FilterChip(
                     selected = isRegister,
                     onClick = { isRegister = true; error = null },
-                    label = { Text("Crear cuenta") },
+                    label = { Text(stringResource(R.string.register_submit)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -107,7 +110,7 @@ fun BusinessAuthScreen(
                 OutlinedTextField(
                     value = company,
                     onValueChange = { company = it },
-                    label = { Text("Nombre de la empresa") },
+                    label = { Text(stringResource(R.string.biz_company)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.small
@@ -118,7 +121,7 @@ fun BusinessAuthScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email") },
+                label = { Text(stringResource(R.string.email)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth(),
@@ -129,7 +132,7 @@ fun BusinessAuthScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Contraseña") },
+                label = { Text(stringResource(R.string.login_password)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -158,7 +161,7 @@ fun BusinessAuthScreen(
             Button(
                 onClick = {
                     if (email.isBlank() || password.isBlank() || (isRegister && company.isBlank())) {
-                        error = "Completa todos los campos"
+                        error = context.getString(R.string.err_fill_all)
                         return@Button
                     }
                     loading = true
@@ -177,7 +180,7 @@ fun BusinessAuthScreen(
                             if (resp.isSuccessful) {
                                 val body = resp.body()
                                 if (body?.accessToken.isNullOrBlank()) {
-                                    error = "El servidor no devolvió sesión"
+                                    error = context.getString(R.string.err_no_session)
                                 } else {
                                     AuthManager.saveBusinessToken(body!!.accessToken)
                                     onAuthenticated()
@@ -210,7 +213,7 @@ fun BusinessAuthScreen(
 
             Spacer(Modifier.height(18.dp))
             Text(
-                text = "¿Buscas planes como particular?",
+                text = stringResource(R.string.biz_are_you_user),
                 modifier = Modifier.clickable { onBack() },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.secondary
