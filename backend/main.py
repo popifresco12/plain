@@ -79,11 +79,13 @@ from schemas import (
     TripGroupCreate,
     TripGroupMemberOut,
     TripGroupResponse,
+    AccountDeleteIn,
 )
 
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+from fastapi.responses import FileResponse, HTMLResponse
 app = FastAPI(title="PLAIN API", version="2.1.0")
 
 @app.on_event("startup")
@@ -432,6 +434,126 @@ def search_plan_images(
             attribution=(item.get("creator") or item.get("source") or "")[:120],
         ))
     return salida
+
+
+# ======================= 0.8.0: sin IA =======================
+# --- Borrado de cuenta y datos (RGPD / Play Store) ---
+def _borrar_datos_usuario(db: Session, uid: int) -> dict:
+    """Borra todo lo que cuelga de un usuario. Busca la columna FK por introspeccion."""
+    borrados = {}
+    for modelo in (Favorite, DislikedTag, PlanEvent, WebhookConfig,
+                   TripGroupMember, GroupMessage, CrashReport, PlanReport, AccountCode):
+        cols = [c.name for c in modelo.__table__.columns]
+        col = next((c for c in ("user_id", "owner_id", "reporter_id", "created_by") if c in cols), None)
+        if col is None:
+            continue
+        try:
+            n = db.query(modelo).filter(getattr(modelo, col) == uid).delete(synchronize_session=False)
+            borrados[modelo.__name__] = n
+        except Exception:
+            db.rollback()
+    return borrados
+
+
+@app.post("/api/me/delete")
+@limiter.limit("10/hour")
+def delete_my_account(
+    request: Request,
+    data: AccountDeleteIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Borra la cuenta y todos sus datos asociados (derecho al olvido)."""
+    if not verify_password(data.password, user.password_hash):
+        raise HTTPException(status_code=403, detail="Contrasena incorrecta")
+    uid = user.id
+    borrados = _borrar_datos_usuario(db, uid)
+    # grupos que creo el solo y webhooks propios
+    for modelo, campo in ((TripGroup, "owner_id"), (TripGroup, "creator_id"), (TripGroup, "user_id")):
+        cols = [c.name for c in modelo.__table__.columns]
+        if campo in cols:
+            try:
+                db.query(modelo).filter(getattr(modelo, campo) == uid).delete(synchronize_session=False)
+            except Exception:
+                db.rollback()
+    db.query(User).filter(User.id == uid).delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": True, "user_id": uid, "detalle": borrados}
+
+
+# --- Plan publico (para el enlace compartible) ---
+@app.get("/api/plans/{plan_id}/public")
+@limiter.limit("120/hour")
+def public_plan(request: Request, plan_id: int, db: Session = Depends(get_db)):
+    """Datos publicos de un plan, sin autenticacion y sin datos de usuarios."""
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+    likes = 0
+    try:
+        likes = db.query(PlanEvent).filter(PlanEvent.plan_id == plan_id).count()
+    except Exception:
+        db.rollback()
+    return {
+        "id": plan.id,
+        "title": getattr(plan, "title", None) or getattr(plan, "name", None),
+        "description": getattr(plan, "description", None),
+        "city": getattr(plan, "city", None),
+        "price": getattr(plan, "price", None),
+        "price_eur": getattr(plan, "price_eur", None),
+        "image_url": getattr(plan, "image_url", None),
+        "category": getattr(plan, "category", None),
+        "availability": getattr(plan, "availability", None),
+        "likes": likes,
+    }
+
+
+@app.get("/share/{plan_id}", response_class=HTMLResponse)
+def share_page(plan_id: int):
+    """Pagina publica que se comparte por WhatsApp/Telegram y abre la app."""
+    f = os.path.join(web_dir, "plan.html")
+    if not os.path.exists(f):
+        raise HTTPException(status_code=404, detail="Pagina no disponible")
+    return FileResponse(f)
+
+
+# --- Planes cerca de mi (sin mapa) ---
+@app.get("/api/plans/nearby")
+@limiter.limit("60/hour")
+def plans_nearby(
+    request: Request,
+    lat: float,
+    lng: float,
+    radius_km: int = 100,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Planes ordenados por distancia real a la posicion del usuario."""
+    from geo import haversine_km, cities_in_radius
+    cercanas = cities_in_radius(lat, lng, radius_km)
+    if not cercanas:
+        return {"items": [], "cities": []}
+    planes = db.query(Plan).filter(Plan.city.in_(list(cercanas.keys()))).all()
+    salida = []
+    for p in planes:
+        c = (getattr(p, "city", None) or "").upper()
+        d = cercanas.get(c)
+        if d is None:
+            continue
+        salida.append({
+            "id": p.id,
+            "title": getattr(p, "title", None) or getattr(p, "name", None),
+            "city": c,
+            "price": getattr(p, "price", None),
+            "image_url": getattr(p, "image_url", None),
+            "distance_km": round(d, 1),
+        })
+    salida.sort(key=lambda x: x["distance_km"])
+    return {"items": salida[:limit], "cities": sorted(cercanas.items(), key=lambda kv: kv[1])}
+
+
+# ======================= fin 0.8.0 =======================
 
 
 @app.put("/api/me")

@@ -354,3 +354,8 @@ class EventsIn(BaseModel):
 class ProfileUpdateIn(BaseModel):
     email: Optional[str] = None
     username: Optional[str] = None
+
+
+class AccountDeleteIn(BaseModel):
+    """Borrado de cuenta: exige la contrasena para confirmar."""
+    password: str

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Un plan de PLAIN</title>
+<meta property="og:title" content="Mira este plan">
+<meta property="og:description" content="Descúbrelo en PLAIN">
+<meta property="og:type" content="website">
+<style>
+  :root { --bg:#0f0f10; --card:#1a1a1c; --txt:#f2f2f3; --mut:#9a9aa0; --acc:#ff5a5f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { background:var(--card); border-radius:20px; overflow:hidden; width:100%; max-width:420px;
+          box-shadow:0 20px 60px rgba(0,0,0,.55); }
+  .foto { width:100%; height:230px; object-fit:cover; display:block; background:#26262a; }
+  .foto.vacia { display:flex; align-items:center; justify-content:center; font-size:52px; }
+  .cuerpo { padding:20px 22px 24px; }
+  .marca { font-size:12px; letter-spacing:3px; color:var(--acc); font-weight:700; margin-bottom:10px; }
+  h1 { font-size:23px; margin:0 0 8px; line-height:1.25; }
+  .meta { color:var(--mut); font-size:14px; margin-bottom:14px; }
+  p { color:#c9c9ce; font-size:15px; line-height:1.5; margin:0 0 18px; }
+  .likes { display:inline-block; background:#26262a; color:#fff; border-radius:999px; padding:6px 13px; font-size:13px; margin-bottom:18px; }
+  a.boton { display:block; text-align:center; background:var(--acc); color:#fff; text-decoration:none;
+            padding:15px; border-radius:14px; font-weight:700; font-size:16px; }
+  .pie { text-align:center; color:#6e6e75; font-size:12px; margin-top:14px; }
+  .error { color:#ff8b8f; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div id="foto" class="foto vacia">🎯</div>
+    <div class="cuerpo">
+      <div class="marca">PLΛIN</div>
+      <h1 id="titulo">Cargando el plan…</h1>
+      <div class="meta" id="meta">&nbsp;</div>
+      <p id="desc"></p>
+      <div class="likes" id="likes" style="display:none"></div>
+      <a class="boton" id="cta" href="#">Abrir en la app</a>
+      <div class="pie">Compartido desde PLAIN</div>
+    </div>
+  </div>
+<script>
+  const id = location.pathname.split('/').filter(Boolean).pop();
+  const appLink = 'plain://plan/' + id;
+  const playLink = 'https://play.google.com/store/apps/details?id=com.plain.app';
+
+  function pintar(p) {
+    document.title = p.title ? p.title + ' · PLAIN' : 'PLAIN';
+    document.getElementById('titulo').textContent = p.title || 'Plan de PLAIN';
+    const partes = [];
+    if (p.city) partes.push(p.city.charAt(0) + p.city.slice(1).toLowerCase());
+    if (p.price) partes.push(p.price + ' €');
+    if (p.availability) partes.push(p.availability);
+    document.getElementById('meta').textContent = partes.join(' · ');
+    if (p.description) document.getElementById('desc').textContent = p.description;
+    if (p.likes) {
+      const l = document.getElementById('likes');
+      l.textContent = '❤️ ' + p.likes + ' personas lo quieren';
+      l.style.display = 'inline-block';
+    }
+    if (p.image_url) {
+      const f = document.getElementById('foto');
+      f.outerHTML = '<img class="foto" src="' + p.image_url + '" alt="">';
+    }
+    const t = p.title || 'este plan';
+    document.querySelector('meta[property="og:title"]').setAttribute('content', t);
+    if (p.description) document.querySelector('meta[property="og:description"]').setAttribute('content', p.description);
+  }
+
+  document.getElementById('cta').href = appLink;
+  // si la app no abre en 1,2 s, llevamos a la ficha de Play Store
+  document.getElementById('cta').addEventListener('click', function (e) {
+    e.preventDefault();
+    const t0 = Date.now();
+    location.href = appLink;
+    setTimeout(function () {
+      if (Date.now() - t0 < 2000 && !document.hidden) location.href = playLink;
+    }, 1200);
+  });
+
+  fetch('/api/plans/' + id + '/public')
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(pintar)
+    .catch(() => {
+      document.getElementById('titulo').textContent = 'No encontramos este plan';
+      document.getElementById('desc').innerHTML = '<span class="error">Puede que se haya retirado.</span>';
+    });
+</script>
+</body>
+</html>

@@ -35,3 +35,4 @@ plain-release-key.jks
 # entorno local de tests del backend
 backend/.venv/
 backend/*.db
+.neon
