@@ -529,28 +529,45 @@ def plans_nearby(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Planes ordenados por distancia real a la posicion del usuario."""
-    from geo import haversine_km, cities_in_radius
+    """Planes ordenados por distancia real a la posicion del usuario (sin mapa).
+
+    geo.cities_in_radius devuelve {CIUDAD: (lat, lng, km)}.
+    """
+    from geo import cities_in_radius
     cercanas = cities_in_radius(lat, lng, radius_km)
-    if not cercanas:
+    por_ciudad = {str(k).upper(): v for k, v in (cercanas or {}).items()}
+    if not por_ciudad:
         return {"items": [], "cities": []}
-    planes = db.query(Plan).filter(Plan.city.in_(list(cercanas.keys()))).all()
+
+    def _km(v):
+        if isinstance(v, (tuple, list)) and len(v) >= 3:
+            return float(v[2])
+        try:
+            return float(v)
+        except Exception:
+            return None
+
+    planes = db.query(Plan).filter(Plan.city.in_(list(por_ciudad.keys()))).all()
     salida = []
     for p in planes:
         c = (getattr(p, "city", None) or "").upper()
-        d = cercanas.get(c)
-        if d is None:
+        km = _km(por_ciudad.get(c))
+        if km is None:
             continue
         salida.append({
             "id": p.id,
-            "title": getattr(p, "title", None) or getattr(p, "name", None),
+            "title": getattr(p, "title", None),
             "city": c,
             "price": getattr(p, "price", None),
             "image_url": getattr(p, "image_url", None),
-            "distance_km": round(d, 1),
+            "distance_km": round(km, 1),
         })
     salida.sort(key=lambda x: x["distance_km"])
-    return {"items": salida[:limit], "cities": sorted(cercanas.items(), key=lambda kv: kv[1])}
+    ciudades = sorted(
+        [[k, round(_km(v), 1)] for k, v in por_ciudad.items() if _km(v) is not None],
+        key=lambda x: x[1],
+    )
+    return {"items": salida[:limit], "cities": ciudades}
 
 
 # ======================= fin 0.8.0 =======================
