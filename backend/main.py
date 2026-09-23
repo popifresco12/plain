@@ -974,12 +974,12 @@ def update_profile(
         if db.query(User).filter(User.username == nuevo, User.id != user.id).first():
             raise HTTPException(status_code=400, detail="Ese nombre ya está en uso")
         user.username = nuevo
-    db.commit()
-    db.refresh(user)
-        if getattr(data, "gender", None) is not None:
+    if getattr(data, "gender", None) is not None:
         g = str(data.gender).strip().upper()[:2]
         user.gender = g if g in ("F", "M") else None
-return {
+    db.commit()
+    db.refresh(user)
+    return {
         "id": user.id,
         "username": user.username,
         "email": user.email,
