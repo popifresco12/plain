@@ -573,6 +573,236 @@ def plans_nearby(
 # ======================= fin 0.8.0 =======================
 
 
+# ======================= 0.8.1: recomendacion + chat IA =======================
+MODELO_CHAT = os.environ.get("PLAIN_CHAT_MODEL", "deepseek/deepseek-v4-flash")
+
+
+def _categoria_de(plan):
+    return (getattr(plan, "category", None) or "").strip().lower()
+
+
+def _perfil_gustos(db: Session, uid: int):
+    """Devuelve (categorias_que_le_gustan, categorias_que_no, planes_que_ya_vio)."""
+    gustan, disgustan, vistos = {}, {}, set()
+    try:
+        for f in db.query(Favorite).filter(Favorite.user_id == uid).all():
+            vistos.add(getattr(f, "plan_id", None))
+        for f in db.query(Favorite).filter(Favorite.user_id == uid).all():
+            p = db.query(Plan).filter(Plan.id == getattr(f, "plan_id", None)).first()
+            if p:
+                gustan[_categoria_de(p)] = gustan.get(_categoria_de(p), 0) + 1
+    except Exception:
+        db.rollback()
+    try:
+        for d in db.query(DislikedTag).filter(DislikedTag.user_id == uid).all():
+            t = (getattr(d, "tag", None) or getattr(d, "name", None) or "").strip().lower()
+            if t:
+                disgustan[t] = disgustan.get(t, 0) + 1
+    except Exception:
+        db.rollback()
+    return gustan, disgustan, vistos
+
+
+@app.get("/api/recommendations")
+@limiter.limit("120/hour")
+def recommendations(
+    request: Request,
+    city: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Planes ordenados por afinidad con lo que le ha gustado al usuario.
+
+    Puntuacion explicita y sin caja negra:
+      +3 por cada like en esa categoria   |  -6 si la categoria esta entre sus 'no'
+      +2 si es de su ciudad               |  + popularidad global (hasta +3)
+      +1 si nunca lo ha visto             |  -4 si ya le dio like (no repetir)
+    """
+    gustan, disgustan, vistos = _perfil_gustos(db, user.id)
+    q = db.query(Plan)
+    if city:
+        q = q.filter(Plan.city == city.strip().upper())
+    planes = q.all()
+
+    populares = {}
+    try:
+        from sqlalchemy import func as _f
+        for pid, n in db.query(PlanEvent.plan_id, _f.count(PlanEvent.id)).group_by(PlanEvent.plan_id).all():
+            populares[pid] = n
+    except Exception:
+        db.rollback()
+    tope = max(populares.values()) if populares else 0
+
+    filas = []
+    for p in planes:
+        cat = _categoria_de(p)
+        pts = 0.0
+        motivos = []
+        if cat and gustan.get(cat):
+            pts += 3 * gustan[cat]
+            motivos.append("te gustan los planes de " + cat)
+        if cat and disgustan.get(cat):
+            pts -= 6 * disgustan[cat]
+        if city and (getattr(p, "city", "") or "").upper() == city.strip().upper():
+            pts += 2
+        if tope and populares.get(p.id):
+            pts += 3 * (populares[p.id] / tope)
+            if populares[p.id] >= max(3, tope * 0.5):
+                motivos.append("es de los mas populares")
+        if p.id not in vistos:
+            pts += 1
+        else:
+            pts -= 4
+        filas.append({
+            "id": p.id,
+            "title": getattr(p, "title", None),
+            "city": getattr(p, "city", None),
+            "category": getattr(p, "category", None),
+            "price": getattr(p, "price", None),
+            "image_url": getattr(p, "image_url", None),
+            "score": round(pts, 2),
+            "reason": (", ".join(motivos) if motivos else "encaja con lo que sueles elegir"),
+        })
+    filas.sort(key=lambda x: -x["score"])
+    return {"items": filas[:limit], "basado_en": {"likes_por_categoria": gustan, "no_quiere": sorted(disgustan)}}
+
+
+# ---- Chat: entiende la frase -> filtros -> BD -> respuesta ----
+def _filtros_por_reglas(texto: str, cities):
+    """Respaldo sin IA: busca ciudad y palabras clave en la frase."""
+    t = (texto or "").lower()
+    filtros = {"city": None, "max_price": None, "category": None, "keywords": []}
+    for c in cities:
+        if c.lower() in t:
+            filtros["city"] = c
+            break
+    for k, cats in (("barato", None), ("gratis", None), ("comer", "gastronomia"), ("tapas", "gastronomia"),
+                    ("tranquil", None), ("naturaleza", "naturaleza"), ("sender", "naturaleza"),
+                    ("cultura", "cultura"), ("museo", "cultura"), ("noche", "ocio"), ("fiesta", "ocio")):
+        if k in t:
+            filtros["keywords"].append(k)
+            if cats and not filtros["category"]:
+                filtros["category"] = cats
+    if "gratis" in t:
+        filtros["max_price"] = 0
+    elif "barato" in t:
+        filtros["max_price"] = 15
+    return filtros
+
+
+def _filtros_con_ia(texto: str, cities, categorias):
+    """El modelo SOLO convierte lenguaje natural en filtros. No propone planes."""
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if not key:
+        return None
+    prompt = (
+        "Eres un extractor de filtros para una app de planes. Devuelve SOLO un JSON valido, sin texto extra:\n"
+        '{"city": <una de la lista o null>, "max_price": <numero o null>, "category": <una de la lista o null>, '
+        '"keywords": [<palabras clave>], "momento": <"manana"|"tarde"|"noche"|null>}\n'
+        "Ciudades: " + ", ".join(cities) + "\n"
+        "Categorias: " + ", ".join(categorias) + "\n"
+        'Frase del usuario: "' + texto[:300] + '"'
+    )
+    try:
+        r = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+            json={"model": MODELO_CHAT, "messages": [{"role": "user", "content": prompt}],
+                  "temperature": 0, "max_tokens": 200},
+            timeout=30.0,
+        )
+        r.raise_for_status()
+        contenido = r.json()["choices"][0]["message"]["content"].strip()
+        contenido = contenido[contenido.find("{"): contenido.rfind("}") + 1]
+        return json.loads(contenido)
+    except Exception as e:
+        print("ask: fallo el modelo, uso reglas:", str(e)[:120])
+        return None
+
+
+@app.post("/api/ask")
+@limiter.limit("30/hour")
+def ask_ai(
+    request: Request,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Pregunta en lenguaje natural. Devuelve una respuesta y planes REALES de la BD."""
+    texto = (data.get("text") or "").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="Escribe que te apetece")
+    city_hint = (data.get("city") or "").strip().upper() or None
+
+    cities = sorted({(p.city or "").upper() for p in db.query(Plan).all() if p.city})
+    categorias = sorted({_categoria_de(p) for p in db.query(Plan).all() if _categoria_de(p)})
+
+    filtros = _filtros_con_ia(texto, cities, categorias) or _filtros_por_reglas(texto, cities)
+    ciudad = (filtros.get("city") or city_hint or "").upper() or None
+
+    q = db.query(Plan)
+    if ciudad:
+        q = q.filter(Plan.city == ciudad)
+    planes = q.all()
+
+    def _precio(p):
+        v = getattr(p, "price", None)
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        try:
+            return float(str(v).replace("€", "").replace(",", ".").strip())
+        except Exception:
+            return None
+
+    maxp = filtros.get("max_price")
+    if isinstance(maxp, (int, float)):
+        planes = [p for p in planes if (_precio(p) is None or _precio(p) <= maxp)]
+    cat = (filtros.get("category") or "").strip().lower()
+    if cat:
+        pref = [p for p in planes if _categoria_de(p) == cat]
+        planes = pref or planes
+    kws = [k for k in (filtros.get("keywords") or []) if isinstance(k, str)]
+    if kws:
+        def _puntua(p):
+            blob = " ".join(str(getattr(p, a, "") or "").lower() for a in ("title", "description", "category"))
+            return sum(1 for k in kws if k.lower() in blob)
+        orden = sorted(planes, key=_puntua, reverse=True)
+        con = [p for p in orden if _puntua(p) > 0]
+        planes = con or orden
+
+    gustan, disgustan, vistos = _perfil_gustos(db, user.id)
+    planes.sort(key=lambda p: (-(gustan.get(_categoria_de(p), 0) * 3) + (6 if _categoria_de(p) in disgustan else 0)))
+    top = planes[:6]
+
+    if not top:
+        respuesta = "No encuentro planes que encajen con eso" + (" en " + ciudad.title() if ciudad else "") + ". Prueba a quitar algun filtro."
+    elif filtros.get("city"):
+        respuesta = "Estos son los que mejor encajan con lo que pides en " + str(ciudad).title() + ":"
+    else:
+        respuesta = "Esto es lo que mejor encaja con lo que pides:"
+
+    return {
+        "answer": respuesta,
+        "filters": filtros,
+        "used_ai": bool(os.environ.get("OPENROUTER_API_KEY", "").strip()),
+        "plans": [{
+            "id": p.id,
+            "title": getattr(p, "title", None),
+            "description": getattr(p, "description", None),
+            "city": getattr(p, "city", None),
+            "category": getattr(p, "category", None),
+            "price": getattr(p, "price", None),
+            "image_url": getattr(p, "image_url", None),
+        } for p in top],
+    }
+
+
+# ======================= fin 0.8.1 =======================
+
+
 @app.put("/api/me")
 def update_profile(
     data: ProfileUpdateIn,
