@@ -354,6 +354,7 @@ class EventsIn(BaseModel):
 class ProfileUpdateIn(BaseModel):
     email: Optional[str] = None
     username: Optional[str] = None
+    gender: Optional[str] = None   # "F", "M" o None (prefiere no decirlo)
 
 
 class AccountDeleteIn(BaseModel):

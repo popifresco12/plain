@@ -15,7 +15,9 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    email_verified = Column(Boolean, default=False)  # verificación opcional (flag REQUIRE_EMAIL_VERIFICATION)
+    email_verified = Column(Boolean, default=False)
+    # Opcional: "F", "M" o None (prefiere no decirlo). Nunca se expone en respuestas publicas.
+    gender = Column(String(2), nullable=True)  # verificación opcional (flag REQUIRE_EMAIL_VERIFICATION)
 
     plans = relationship("Plan", back_populates="creator")
     webhook = relationship("WebhookConfig", back_populates="user", uselist=False)
@@ -148,6 +150,9 @@ class TripGroup(Base):
     seats = Column(Integer, default=4)                   # Plazas totales (coche)
     transport = Column(String(50), default="COCHE")      # COCHE, ANDANDO, BUS, MOTO
     notes = Column(Text, nullable=True)
+    # Reglas de entrada del grupo
+    join_mode = Column(String(10), default="open")        # open | approval
+    gender_policy = Column(String(10), default="any")     # any | female | male
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     plan = relationship("Plan")
@@ -161,6 +166,7 @@ class TripGroupMember(Base):
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("trip_groups.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(10), default="joined")   # joined | pending | rejected
     joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     group = relationship("TripGroup", back_populates="members")

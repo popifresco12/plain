@@ -302,6 +302,10 @@ def ensure_schema() -> None:
         # OJO: en PostgreSQL "DEFAULT 0" para BOOLEAN es inválido (y el try/except
         # de abajo lo ocultaba, dejando la columna sin crear y rompiendo el login).
         ("users", "email_verified", "BOOLEAN DEFAULT FALSE"),
+        ("users", "gender", "VARCHAR(2)"),
+        ("trip_groups", "join_mode", "VARCHAR(10) DEFAULT 'open'"),
+        ("trip_groups", "gender_policy", "VARCHAR(10) DEFAULT 'any'"),
+        ("trip_group_members", "status", "VARCHAR(10) DEFAULT 'joined'"),
     ]
     with engine.connect() as conn:
         for tabla, columna, tipo in columnas:
@@ -803,6 +807,153 @@ def ask_ai(
 # ======================= fin 0.8.1 =======================
 
 
+# ======================= 0.8.2: reglas de entrada en grupos =======================
+def _plazas_libres(db: Session, grupo):
+    """Plazas que quedan: seats menos los que ya estan dentro (joined)."""
+    dentro = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == grupo.id,
+        TripGroupMember.status == "joined",
+    ).count()
+    total = grupo.seats or 4
+    return max(0, total - dentro)
+
+
+def _puede_entrar(db: Session, grupo, user):
+    """Devuelve (ok, motivo). Aplica plazas y politica de genero del grupo."""
+    if _plazas_libres(db, grupo) <= 0:
+        return False, "El grupo esta completo"
+    pol = (grupo.gender_policy or "any").lower()
+    if pol in ("female", "male"):
+        g = (getattr(user, "gender", None) or "").upper()
+        if not g:
+            return False, ("Este grupo es solo para " + ("mujeres" if pol == "female" else "hombres") +
+                           ". Puedes indicar tu genero en tu perfil si quieres entrar.")
+        if g != ("F" if pol == "female" else "M"):
+            return False, "Este grupo es solo para " + ("mujeres" if pol == "female" else "hombres")
+    return True, ""
+
+
+@app.post("/api/groups/{group_id}/request", response_model=TripGroupResponse)
+@limiter.limit("60/hour")
+def request_join_group(
+    request: Request,
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Pide entrar. Si el grupo es abierto entra ya; si no, queda pendiente de confirmacion."""
+    grupo = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+    if not grupo:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    ya = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id).first()
+    if ya and ya.status == "joined":
+        return grupo
+    ok, motivo = _puede_entrar(db, grupo, user)
+    if not ok:
+        raise HTTPException(status_code=403, detail=motivo)
+    modo = (grupo.join_mode or "open").lower()
+    estado = "joined" if modo == "open" else "pending"
+    if ya:
+        ya.status = estado
+    else:
+        db.add(TripGroupMember(group_id=group_id, user_id=user.id, status=estado))
+    db.commit()
+    db.refresh(grupo)
+    return grupo
+
+
+@app.get("/api/groups/{group_id}/requests")
+@limiter.limit("120/hour")
+def list_group_requests(
+    request: Request,
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Solo el creador ve quien ha pedido entrar."""
+    grupo = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+    if not grupo:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    if grupo.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Solo el creador del grupo")
+    pend = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.status == "pending").all()
+    out = []
+    for p in pend:
+        u = db.query(User).filter(User.id == p.user_id).first()
+        out.append({
+            "user_id": p.user_id,
+            "username": getattr(u, "username", None),
+            "desde": p.joined_at.isoformat() if p.joined_at else None,
+        })
+    return {"pending": out, "plazas_libres": _plazas_libres(db, grupo)}
+
+
+@app.post("/api/groups/{group_id}/approve")
+@limiter.limit("120/hour")
+def approve_group_request(
+    request: Request,
+    group_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """El creador confirma (o rechaza) a quien ha pedido entrar."""
+    grupo = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+    if not grupo:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    if grupo.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Solo el creador del grupo")
+    objetivo = data.get("user_id")
+    aprobar = bool(data.get("approve", True))
+    miembro = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.user_id == objetivo).first()
+    if not miembro:
+        raise HTTPException(status_code=404, detail="No hay solicitud de ese usuario")
+    if aprobar and _plazas_libres(db, grupo) <= 0:
+        raise HTTPException(status_code=403, detail="El grupo esta completo")
+    miembro.status = "joined" if aprobar else "rejected"
+    db.commit()
+    return {"user_id": objetivo, "status": miembro.status, "plazas_libres": _plazas_libres(db, grupo)}
+
+
+@app.post("/api/groups/{group_id}/rules")
+@limiter.limit("60/hour")
+def set_group_rules(
+    request: Request,
+    group_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """El creador cambia la politica del grupo: modo de entrada y genero admitido."""
+    grupo = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+    if not grupo:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    if grupo.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Solo el creador del grupo")
+    modo = (data.get("join_mode") or grupo.join_mode or "open").lower()
+    pol = (data.get("gender_policy") or grupo.gender_policy or "any").lower()
+    if modo not in ("open", "approval"):
+        raise HTTPException(status_code=400, detail="join_mode debe ser open o approval")
+    if pol not in ("any", "female", "male"):
+        raise HTTPException(status_code=400, detail="gender_policy debe ser any, female o male")
+    grupo.join_mode = modo
+    grupo.gender_policy = pol
+    if data.get("seats") is not None:
+        try:
+            grupo.seats = max(1, min(20, int(data["seats"])))
+        except Exception:
+            pass
+    db.commit()
+    return {"join_mode": grupo.join_mode, "gender_policy": grupo.gender_policy,
+            "seats": grupo.seats, "plazas_libres": _plazas_libres(db, grupo)}
+
+
+# ======================= fin 0.8.2 =======================
+
+
 @app.put("/api/me")
 def update_profile(
     data: ProfileUpdateIn,
@@ -825,7 +976,10 @@ def update_profile(
         user.username = nuevo
     db.commit()
     db.refresh(user)
-    return {
+        if getattr(data, "gender", None) is not None:
+        g = str(data.gender).strip().upper()[:2]
+        user.gender = g if g in ("F", "M") else None
+return {
         "id": user.id,
         "username": user.username,
         "email": user.email,
@@ -1697,31 +1851,25 @@ def join_group(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Apúntate a una quedada si quedan plazas."""
-    group = db.query(TripGroup).filter(TripGroup.id == group_id).first()
-    if not group:
+    """Entra en un grupo respetando sus reglas (plazas, genero y modo de entrada)."""
+    grupo = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+    if not grupo:
         raise HTTPException(status_code=404, detail="Grupo no encontrado")
-    exists = db.query(TripGroupMember).filter(
-        TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id
-    ).first()
-    if exists:
-        raise HTTPException(status_code=400, detail="Ya estás en este grupo")
-    if len(group.members) >= group.seats:
-        raise HTTPException(status_code=400, detail="Grupo completo")
-    member = TripGroupMember(group_id=group_id, user_id=user.id)
-    db.add(member)
+    ya = db.query(TripGroupMember).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id).first()
+    if ya and ya.status == "joined":
+        return grupo
+    ok, motivo = _puede_entrar(db, grupo, user)
+    if not ok:
+        raise HTTPException(status_code=403, detail=motivo)
+    estado = "joined" if (grupo.join_mode or "open") == "open" else "pending"
+    if ya:
+        ya.status = estado
+    else:
+        db.add(TripGroupMember(group_id=group_id, user_id=user.id, status=estado))
     db.commit()
-    db.refresh(group)
-    plan = db.query(Plan).filter(Plan.id == group.plan_id).first()
-    resp = TripGroupResponse(
-        id=group.id, plan_id=group.plan_id, plan_title=plan.title if plan else "",
-        owner_id=group.owner_id, owner_username=group.owner.username if group.owner else "",
-        title=group.title, meeting_point=group.meeting_point, meet_at=group.meet_at,
-        seats=group.seats, transport=group.transport, notes=group.notes, created_at=group.created_at,
-    )
-    resp.members = [TripGroupMemberOut(user_id=m.user_id, username=m.user.username if m.user else "", joined_at=m.joined_at) for m in group.members]
-    resp.seats_taken = len(group.members)
-    return resp
+    db.refresh(grupo)
+    return grupo
 
 
 @app.delete("/api/groups/{group_id}/leave")
