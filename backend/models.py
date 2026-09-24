@@ -18,6 +18,8 @@ class User(Base):
     email_verified = Column(Boolean, default=False)
     # Opcional: "F", "M" o None (prefiere no decirlo). Nunca se expone en respuestas publicas.
     gender = Column(String(2), nullable=True)  # verificación opcional (flag REQUIRE_EMAIL_VERIFICATION)
+    # Se incrementa en «cerrar sesión en todos los dispositivos»: invalida los access tokens emitidos antes
+    token_version = Column(Integer, default=0)
 
     plans = relationship("Plan", back_populates="creator")
     webhook = relationship("WebhookConfig", back_populates="user", uselist=False)
@@ -253,3 +255,39 @@ class PlanEvent(Base):
     city = Column(String(50), nullable=True)
     event = Column(String(20), nullable=False)          # view | like | dislike | open | favorite
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class Notification(Base):
+    """Aviso para un usuario (alguien se une, te aceptan, mensaje, match...).
+
+    La app los recoge en segundo plano (WorkManager) y, con la app abierta, le
+    llegan al instante por WebSocket. `collapse_key` agrupa avisos repetidos
+    (p. ej. todos los mensajes de un mismo chat) en uno solo sin leer.
+    """
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)            # message | join | request | approved | rejected | match | group_new
+    title = Column(String(200), nullable=False)
+    body = Column(Text, nullable=False, default="")
+    data = Column(Text, nullable=False, default="{}")    # JSON: group_id, plan_id...
+    collapse_key = Column(String(80), nullable=True, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    read_at = Column(DateTime, nullable=True)
+
+
+class RefreshToken(Base):
+    """Token de refresco (rotativo). Se guarda solo su hash SHA-256.
+
+    Cada uso lo revoca y emite otro. Si llega uno ya revocado, alguien lo ha
+    robado: se revocan todos los del usuario.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

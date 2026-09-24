@@ -21,7 +21,9 @@ if not SECRET_KEY:
         "y configúralo en el entorno antes de arrancar."
     )
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_DAYS = 30  # empresas (el panel de negocio no usa refresco)
+# Usuarios: token corto + refresh token rotativo (tokens.py). Configurable por entorno.
+USER_ACCESS_TOKEN_MINUTES = int(os.environ.get("USER_ACCESS_TOKEN_MINUTES", str(24 * 60)))
 
 security = HTTPBearer(auto_error=False)
 
@@ -39,12 +41,13 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(user_id: int) -> str:
-    """Create JWT token for a regular user."""
-    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+def create_access_token(user_id: int, version: int = 0) -> str:
+    """Create JWT token for a regular user (vida corta; se renueva con el refresh token)."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=USER_ACCESS_TOKEN_MINUTES)
     payload = {
         "sub": str(user_id),
         "type": "user",
+        "ver": int(version or 0),
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
@@ -87,6 +90,9 @@ def get_current_user(
     user = db.query(User).filter(User.id == int(payload["sub"])).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    # «Cerrar sesión en todos los dispositivos» sube token_version: los tokens viejos dejan de valer
+    if int(payload.get("ver", 0)) != int(getattr(user, "token_version", 0) or 0):
+        raise HTTPException(status_code=401, detail="Sesión cerrada. Vuelve a entrar")
     return user
 
 

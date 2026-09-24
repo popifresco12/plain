@@ -9,7 +9,10 @@ from urllib.parse import urlparse
 
 import httpx
 import stripe
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+import asyncio
+
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -19,7 +22,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import geo
+import matches as matches_mod
+import notifications as notif_mod
+import recommend_vec
+import tokens as tokens_mod
+from ratelimit import limiter
+from realtime import hub
 from auth import (
+    decode_token,
     create_access_token,
     create_business_access_token,
     get_current_user,
@@ -83,7 +93,8 @@ from schemas import (
 )
 
 # Create tables
-Base.metadata.create_all(bind=engine)
+# Esquema: lo gestiona Alembic en el arranque (run_migrations). Ya no se crea al importar,
+# así los tests y los scripts no tocan la BD real por el mero hecho de importar main.
 
 from fastapi.responses import FileResponse, HTMLResponse
 app = FastAPI(title="PLAIN API", version="2.1.0")
@@ -92,18 +103,113 @@ app = FastAPI(title="PLAIN API", version="2.1.0")
 def seed_on_startup():
     """Seed automático en producción (uvicorn main:app no pasa por __main__)."""
     try:
-        ensure_schema()
+        run_migrations()
     except Exception as e:
-        print(f"⚠️ ensure_schema falló (no crítico): {e}")
+        # Nunca dejar la API sin arrancar por una migración: se cae al método antiguo
+        print(f"⚠️ migraciones fallaron, uso create_all + ensure_schema: {e}")
+        Base.metadata.create_all(bind=engine)
+        try:
+            ensure_schema()
+        except Exception as e2:
+            print(f"⚠️ ensure_schema falló (no crítico): {e2}")
     try:
         seed_plans()
     except Exception as e:
         print(f"⚠️ seed_plans falló (no crítico): {e}")
 
 # Rate limiting — auth endpoints son bruteforceables
-limiter = Limiter(key_func=get_remote_address)
+# limiter: definido en ratelimit.py (compartido con los routers)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- Módulos 0.9.0: avisos, match, sesiones (refresh tokens) ---
+app.include_router(notif_mod.router)
+app.include_router(matches_mod.router)
+app.include_router(tokens_mod.router)
+
+
+def _ws_db_session():
+    """Sesión de BD para el WebSocket respetando los overrides de los tests."""
+    gen = app.dependency_overrides.get(get_db, get_db)()
+    return gen, next(gen)
+
+
+def _joined_member_ids(group_id: int, user_id: int) -> list[int]:
+    """Miembros (joined) de un grupo, o [] si user_id no es miembro."""
+    gen, db = _ws_db_session()
+    try:
+        ids = [uid for (uid,) in db.query(TripGroupMember.user_id).filter(
+            TripGroupMember.group_id == group_id,
+            TripGroupMember.status == "joined").all()]
+        g = db.query(TripGroup).filter(TripGroup.id == group_id).first()
+        if g and g.owner_id not in ids:
+            ids.append(g.owner_id)
+        return ids if user_id in ids else []
+    finally:
+        gen.close()
+
+
+def _ws_user(token: str):
+    """(user_id, username) del token, o None si no vale (incluye token_version)."""
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        return None
+    if payload.get("type") != "user":
+        return None
+    gen, db = _ws_db_session()
+    try:
+        u = db.query(User).filter(User.id == int(payload["sub"])).first()
+        if not u or int(payload.get("ver", 0)) != int(getattr(u, "token_version", 0) or 0):
+            return None
+        return u.id, u.username
+    finally:
+        gen.close()
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str = ""):
+    """Canal en tiempo real: mensajes de chat, «escribiendo…» y avisos.
+
+    Cliente → servidor: {"type":"ping"} | {"type":"typing","group_id":N}
+    Servidor → cliente: {"type":"pong"} | {"type":"message",...} | {"type":"typing",...}
+                         | {"type":"notification",...} | {"type":"hello","user_id":N}
+    """
+    who = await run_in_threadpool(_ws_user, token)
+    if who is None:
+        await websocket.close(code=4401)
+        return
+    uid, uname = who
+    await websocket.accept()
+    hub.loop = asyncio.get_running_loop()
+    hub.connect(uid, websocket)
+    try:
+        await websocket.send_json({"type": "hello", "user_id": uid})
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+            except ValueError:
+                continue
+            kind = msg.get("type")
+            if kind == "ping":
+                await websocket.send_json({"type": "pong"})
+            elif kind == "typing":
+                try:
+                    gid = int(msg.get("group_id"))
+                except (TypeError, ValueError):
+                    continue
+                members = await run_in_threadpool(_joined_member_ids, gid, uid)
+                for m in members:
+                    if m != uid:
+                        await hub.send_user(m, {"type": "typing", "group_id": gid,
+                                                "user_id": uid, "username": uname})
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        hub.disconnect(uid, websocket)
 
 # Stripe configuration
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -137,7 +243,7 @@ os.makedirs(web_dir, exist_ok=True)
 app.mount("/business", StaticFiles(directory=web_dir, html=True), name="business")
 
 
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.9.0"
 
 # Verificación de email: implementada pero APAGADA por defecto (para poder probar
 # sin depender del correo). Pon REQUIRE_EMAIL_VERIFICATION=1 en el entorno para activarla.
@@ -291,7 +397,46 @@ def _send_code_email(email: str, code: str, purpose: str) -> bool:
         return False
 
 
-def ensure_schema() -> None:
+def run_migrations(bind=None) -> str:
+    """Lleva la BD a la última migración de Alembic (migrations/versions).
+
+    - BD vacía → `upgrade head` (crea todo desde la migración base).
+    - BD anterior a Alembic (ya tiene tablas, sin `alembic_version`) → se completa
+      con create_all + ensure_schema (idempotentes, no tocan datos) y se marca
+      como base con `stamp head`.
+    - BD ya versionada → `upgrade head` (aplica solo lo nuevo).
+    Devuelve qué hizo, para los logs y los tests.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import inspect
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    cfg = Config(os.path.join(here, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(here, "migrations"))
+    cfg.attributes["configure_logger"] = False
+    bind = bind or engine
+    with bind.connect() as conn:
+        cfg.attributes["connection"] = conn
+        tables = set(inspect(conn).get_table_names())
+        if "alembic_version" not in tables and "users" in tables:
+            Base.metadata.create_all(bind=conn)
+            conn.commit()
+            accion = "stamp"
+        else:
+            accion = "upgrade"
+        if accion == "stamp":
+            command.stamp(cfg, "head")
+        else:
+            command.upgrade(cfg, "head")
+        conn.commit()
+    if accion == "stamp":
+        ensure_schema(bind)
+    print(f"🗄️  migraciones: {accion} head")
+    return accion
+
+
+def ensure_schema(bind=None) -> None:
     """Añade columnas nuevas a tablas ya existentes (create_all no las añade).
 
     Sin esto, en producción (base de datos que ya existe) las columnas nuevas
@@ -306,18 +451,25 @@ def ensure_schema() -> None:
         ("trip_groups", "join_mode", "VARCHAR(10) DEFAULT 'open'"),
         ("trip_groups", "gender_policy", "VARCHAR(10) DEFAULT 'any'"),
         ("trip_group_members", "status", "VARCHAR(10) DEFAULT 'joined'"),
+        ("users", "token_version", "INTEGER DEFAULT 0"),
     ]
-    with engine.connect() as conn:
+    from sqlalchemy import inspect as _inspect
+
+    with (bind or engine).connect() as conn:
+        insp = _inspect(conn)
+        tablas = set(insp.get_table_names())
+        existentes = {t: {c["name"] for c in insp.get_columns(t)} for t in {t for t, _, _ in columnas} if t in tablas}
         for tabla, columna, tipo in columnas:
+            if tabla not in existentes or columna in existentes[tabla]:
+                continue  # tabla aún no creada, o columna ya presente: nada que hacer
             try:
                 conn.exec_driver_sql(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+                conn.commit()
                 print(f"🛠️  +{tabla}.{columna}")
             except Exception as e:
-                if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
-                    pass  # ya existe: correcto
-                else:
-                    print(f"⚠️ no pude añadir {tabla}.{columna}: {e}")
-        conn.commit()
+                # En PostgreSQL un error aborta la transacción: sin rollback fallarían todos los siguientes
+                conn.rollback()
+                print(f"⚠️ no pude añadir {tabla}.{columna}: {e}")
 
 
 def seed_plans():
@@ -808,6 +960,26 @@ def ask_ai(
 
 
 # ======================= 0.8.2: reglas de entrada en grupos =======================
+def _group_out(db: Session, g: TripGroup, viewer_id: Optional[int] = None) -> TripGroupResponse:
+    """Respuesta de una quedada. Solo cuentan como miembros los aceptados (joined).
+
+    Antes join/request devolvían el objeto de BD tal cual y Pydantic fallaba
+    (los miembros no traen username) → 500, aunque el usuario sí había entrado.
+    """
+    joined = [m for m in g.members if (m.status or "joined") == "joined"]
+    mine = next((m.status or "joined" for m in g.members if m.user_id == viewer_id), None)
+    return TripGroupResponse(
+        id=g.id, plan_id=g.plan_id, plan_title=g.plan.title if g.plan else "",
+        owner_id=g.owner_id, owner_username=g.owner.username if g.owner else "",
+        title=g.title, meeting_point=g.meeting_point, meet_at=g.meet_at,
+        seats=g.seats or 4, transport=g.transport or "COCHE", notes=g.notes, created_at=g.created_at,
+        members=[TripGroupMemberOut(user_id=m.user_id, username=m.user.username if m.user else "",
+                                    joined_at=m.joined_at) for m in joined],
+        seats_taken=len(joined), join_mode=g.join_mode or "open",
+        gender_policy=g.gender_policy or "any", my_status=mine,
+    )
+
+
 def _plazas_libres(db: Session, grupo):
     """Plazas que quedan: seats menos los que ya estan dentro (joined)."""
     dentro = db.query(TripGroupMember).filter(
@@ -833,6 +1005,20 @@ def _puede_entrar(db: Session, grupo, user):
     return True, ""
 
 
+def _avisar_entrada(db: Session, grupo: TripGroup, user: User, estado: str) -> None:
+    """Avisa al creador de la quedada de que alguien entra o pide entrar."""
+    if grupo.owner_id == user.id:
+        return
+    data = {"group_id": grupo.id, "group_title": grupo.title, "plan_id": grupo.plan_id}
+    if estado == "joined":
+        notif_mod.notify_safe(db, grupo.owner_id, "join", f"👋 @{user.username} se ha unido",
+                              f"a tu quedada «{grupo.title}».", data, collapse_key=f"join:{grupo.id}")
+    elif estado == "pending":
+        notif_mod.notify_safe(db, grupo.owner_id, "request", f"🙋 @{user.username} quiere unirse",
+                              f"a «{grupo.title}». Acepta o rechaza desde la quedada.", data,
+                              collapse_key=f"req-owner:{grupo.id}")
+
+
 @app.post("/api/groups/{group_id}/request", response_model=TripGroupResponse)
 @limiter.limit("60/hour")
 def request_join_group(
@@ -848,7 +1034,7 @@ def request_join_group(
     ya = db.query(TripGroupMember).filter(
         TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id).first()
     if ya and ya.status == "joined":
-        return grupo
+        return _group_out(db, grupo, user.id)
     ok, motivo = _puede_entrar(db, grupo, user)
     if not ok:
         raise HTTPException(status_code=403, detail=motivo)
@@ -859,8 +1045,9 @@ def request_join_group(
     else:
         db.add(TripGroupMember(group_id=group_id, user_id=user.id, status=estado))
     db.commit()
+    _avisar_entrada(db, grupo, user, estado)
     db.refresh(grupo)
-    return grupo
+    return _group_out(db, grupo, user.id)
 
 
 @app.get("/api/groups/{group_id}/requests")
@@ -915,6 +1102,15 @@ def approve_group_request(
         raise HTTPException(status_code=403, detail="El grupo esta completo")
     miembro.status = "joined" if aprobar else "rejected"
     db.commit()
+    if aprobar:
+        titulo, cuerpo = f"✅ Te han aceptado en «{grupo.title}»", "Ya puedes escribir en el chat de la quedada."
+    else:
+        titulo, cuerpo = f"Tu solicitud a «{grupo.title}» no fue aceptada", "Puedes buscar otra quedada para el mismo plan."
+    notif_mod.notify_safe(
+        db, int(objetivo), "approved" if aprobar else "rejected", titulo, cuerpo,
+        {"group_id": grupo.id, "group_title": grupo.title, "plan_id": grupo.plan_id},
+        collapse_key=f"req:{grupo.id}",
+    )
     return {"user_id": objetivo, "status": miembro.status, "plazas_libres": _plazas_libres(db, grupo)}
 
 
@@ -1171,10 +1367,7 @@ def register(request: Request, data: UserRegister, db: Session = Depends(get_db)
     db.add(user)
     db.commit()
     db.refresh(user)
-    return TokenResponse(
-        access_token=create_access_token(user.id),
-        user=UserResponse.model_validate(user),
-    )
+    return TokenResponse(**tokens_mod.token_pair(db, user), user=UserResponse.model_validate(user))
 
 
 @app.post("/api/login", response_model=TokenResponse)
@@ -1188,10 +1381,7 @@ def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
             status_code=403,
             detail="Verifica tu email antes de entrar (revisa tu correo o pide otro código)",
         )
-    return TokenResponse(
-        access_token=create_access_token(user.id),
-        user=UserResponse.model_validate(user),
-    )
+    return TokenResponse(**tokens_mod.token_pair(db, user), user=UserResponse.model_validate(user))
 
 
 @app.get("/api/me", response_model=UserResponse)
@@ -1389,10 +1579,14 @@ def list_plans(
     plan_type: Optional[str] = None,
     category: Optional[str] = None,
     only_available: bool = False,
+    for_you: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """List plans: free + active sponsored, sorted with user's disliked tags last.
+
+    `for_you=true` ordena por afinidad con lo que el usuario ha marcado
+    (recommend_vec: TF-IDF + coseno) y añade `reason` explicando el porqué.
 
     `radius_km` > 0 amplía el resultado a las ciudades dentro de ese radio
     (para ver planes de alrededor sin cambiar de ciudad); cada plan devuelve
@@ -1472,6 +1666,25 @@ def list_plans(
             return sum(1 for t in p_tags if t in disliked_tag_set)
         all_plans.sort(key=plan_score)
 
+    # «Para ti»: afinidad de contenido con su historial (los patrocinados no se reordenan)
+    reasons: dict[int, str] = {}
+    if for_you and all_plans:
+        ranking = recommend_vec.rank_for_user(db, user.id, all_plans)
+        if ranking:
+            def _afinidad(p: Plan) -> float:
+                return ranking.get(p.id, (0.0, None))[0]
+            libres = [p for p in all_plans if not p.is_sponsored]
+            patro = [p for p in all_plans if p.is_sponsored]
+            libres.sort(key=_afinidad, reverse=True)
+            # Intercalar un patrocinado cada 5 libres (antes iban todos al final)
+            mezcla, i = [], 0
+            for idx, p in enumerate(libres):
+                mezcla.append(p)
+                if (idx + 1) % 5 == 0 and i < len(patro):
+                    mezcla.append(patro[i]); i += 1
+            all_plans = mezcla + patro[i:]
+            reasons = {pid: r for pid, (_, r) in ranking.items() if r}
+
     # Paginación: por defecto 200 (la app sigue pidiendo una sola página)
     limit = max(1, min(int(limit or 200), 500))
     offset = max(0, int(offset or 0))
@@ -1481,6 +1694,7 @@ def list_plans(
     for p in all_plans:
         p.is_available_now = plan_is_available(p)
         p.distance_km = distances.get(p.id)
+        p.reason = reasons.get(p.id)
 
     return all_plans
 
@@ -1554,7 +1768,8 @@ def add_favorite(
             plan.is_active = False
 
     db.commit()
-    return {"status": "favorited"}
+    n_matches = matches_mod.on_favorite(db, user, plan)
+    return {"status": "favorited", "matches": n_matches}
 
 
 @app.delete("/api/favorites/{plan_id}")
@@ -1797,18 +2012,7 @@ def list_plan_groups(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
     groups = db.query(TripGroup).filter(TripGroup.plan_id == plan_id).all()
-    result = []
-    for g in groups:
-        resp = TripGroupResponse(
-            id=g.id, plan_id=g.plan_id, plan_title=plan.title,
-            owner_id=g.owner_id, owner_username=g.owner.username if g.owner else "",
-            title=g.title, meeting_point=g.meeting_point, meet_at=g.meet_at,
-            seats=g.seats, transport=g.transport, notes=g.notes, created_at=g.created_at,
-        )
-        resp.members = [TripGroupMemberOut(user_id=m.user_id, username=m.user.username if m.user else "", joined_at=m.joined_at) for m in g.members]
-        resp.seats_taken = len(g.members)
-        result.append(resp)
-    return result
+    return [_group_out(db, g, user.id) for g in groups]
 
 
 @app.post("/api/plans/{plan_id}/groups", response_model=TripGroupResponse)
@@ -1834,15 +2038,9 @@ def create_plan_group(
     db.add(member)
     db.commit()
     db.refresh(group)
-    resp = TripGroupResponse(
-        id=group.id, plan_id=group.plan_id, plan_title=plan.title,
-        owner_id=group.owner_id, owner_username=user.username,
-        title=group.title, meeting_point=group.meeting_point, meet_at=group.meet_at,
-        seats=group.seats, transport=group.transport, notes=group.notes, created_at=group.created_at,
-    )
-    resp.members = [TripGroupMemberOut(user_id=user.id, username=user.username, joined_at=member.joined_at)]
-    resp.seats_taken = 1
-    return resp
+    matches_mod.on_group_created(db, user, group, plan)
+    db.refresh(group)
+    return _group_out(db, group, user.id)
 
 
 @app.post("/api/groups/{group_id}/join", response_model=TripGroupResponse)
@@ -1858,7 +2056,7 @@ def join_group(
     ya = db.query(TripGroupMember).filter(
         TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id).first()
     if ya and ya.status == "joined":
-        return grupo
+        return _group_out(db, grupo, user.id)
     ok, motivo = _puede_entrar(db, grupo, user)
     if not ok:
         raise HTTPException(status_code=403, detail=motivo)
@@ -1868,8 +2066,9 @@ def join_group(
     else:
         db.add(TripGroupMember(group_id=group_id, user_id=user.id, status=estado))
     db.commit()
+    _avisar_entrada(db, grupo, user, estado)
     db.refresh(grupo)
-    return grupo
+    return _group_out(db, grupo, user.id)
 
 
 @app.delete("/api/groups/{group_id}/leave")
@@ -1897,7 +2096,9 @@ def _require_membership(db: Session, group_id: int, user: User) -> TripGroup:
     if not group:
         raise HTTPException(status_code=404, detail="Quedada no encontrada")
     is_member = db.query(TripGroupMember).filter(
-        TripGroupMember.group_id == group_id, TripGroupMember.user_id == user.id
+        TripGroupMember.group_id == group_id,
+        TripGroupMember.user_id == user.id,
+        TripGroupMember.status == "joined",
     ).first() is not None
     if not is_member and group.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Únete a la quedada para ver el chat")
@@ -1937,15 +2138,30 @@ def post_group_message(
     user: User = Depends(get_current_user),
 ):
     """Envía un mensaje a la quedada (solo miembros)."""
-    _require_membership(db, group_id, user)
+    group = _require_membership(db, group_id, user)
     msg = GroupMessage(group_id=group_id, user_id=user.id, text=data.text.strip())
     db.add(msg)
     db.commit()
     db.refresh(msg)
-    return GroupMessageOut(
+    out = GroupMessageOut(
         id=msg.id, group_id=msg.group_id, user_id=msg.user_id,
         username=user.username, text=msg.text, created_at=msg.created_at,
     )
+    # Tiempo real a todos los miembros (también al autor: sus otros dispositivos)
+    miembros = [uid for (uid,) in db.query(TripGroupMember.user_id).filter(
+        TripGroupMember.group_id == group_id, TripGroupMember.status == "joined").all()]
+    if group.owner_id not in miembros:
+        miembros.append(group.owner_id)
+    hub.publish_many(miembros, {"type": "message", "group_id": group_id,
+                                "message": out.model_dump(mode="json")})
+    # Aviso (agrupado: uno por chat sin leer) a los demás
+    for uid in miembros:
+        if uid != user.id:
+            notif_mod.notify_safe(
+                db, uid, "message", f"💬 {group.title}", f"@{user.username}: {msg.text[:120]}",
+                {"group_id": group_id, "group_title": group.title}, collapse_key=f"msg:{group_id}",
+            )
+    return out
 
 
 # --- CIUDADES DINÁMICAS (bootstrap) ---

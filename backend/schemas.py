@@ -29,6 +29,8 @@ class UserResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    refresh_token: Optional[str] = None   # 0.9.0: sesión renovable (ver tokens.py)
+    expires_in: Optional[int] = None      # segundos de vida del access token
     user: UserResponse
 
 
@@ -81,6 +83,7 @@ class PlanResponse(BaseModel):
     recurring: Optional[str] = None
     is_available_now: bool = True  # Computed: active AND within dates
     # Distancia en km a la ciudad del usuario (solo con radius_km > 0)
+    reason: Optional[str] = None          # 0.9.0: por qué te lo recomendamos (Para ti)
     distance_km: Optional[float] = None
     image_url: Optional[str] = None
 
@@ -263,6 +266,9 @@ class TripGroupResponse(BaseModel):
     created_at: datetime
     members: list[TripGroupMemberOut] = []
     seats_taken: int = 0
+    join_mode: str = "open"              # open | approval
+    gender_policy: str = "any"           # any | female | male
+    my_status: Optional[str] = None       # joined | pending | rejected | None (para quien pregunta)
 
     model_config = ConfigDict(from_attributes=True)
 
