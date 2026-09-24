@@ -13,8 +13,8 @@ android {
         applicationId = "com.plain.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 43
-        versionName = "0.8.3"
+        versionCode = 90
+        versionName = "0.9.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -100,6 +100,8 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.6")
 
     // Coil para imágenes de planes
+    // Avisos en segundo plano (0.9.0)
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("io.coil-kt:coil-compose:2.5.0")
 
     // Retrofit (API client)

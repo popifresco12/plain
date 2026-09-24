@@ -21,11 +21,15 @@ import androidx.compose.ui.unit.sp
 import com.plain.app.data.ApiClient
 import com.plain.app.data.GroupMessageRequest
 import com.plain.app.data.GroupMessageResponse
+import com.plain.app.data.MarkReadRequest
+import com.plain.app.data.RealtimeClient
+import com.google.gson.Gson
 import kotlinx.coroutines.delay
 
 /**
  * Chat de una quedada grupal: los miembros hablan para coordinar el plan.
- * Refresca automáticamente cada 5s para ver mensajes nuevos.
+ * 0.9.0: mensajes al instante por WebSocket + «está escribiendo». El refresco
+ * periódico queda de respaldo (20 s con WebSocket conectado, 5 s sin él).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +47,63 @@ fun GroupChatScreen(
     var myUserId by remember { mutableStateOf<Int?>(null) }
     var pendingText by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
+    var typingUser by remember { mutableStateOf<String?>(null) }
+    var typingStamp by remember { mutableLongStateOf(0L) }
+    var lastTypingSent by remember { mutableLongStateOf(0L) }
+    var readTick by remember { mutableIntStateOf(0) }
+
+    // Este chat está en pantalla: sus mensajes no generan notificación del sistema
+    DisposableEffect(groupId) {
+        RealtimeClient.activeGroupId = groupId
+        onDispose { if (RealtimeClient.activeGroupId == groupId) RealtimeClient.activeGroupId = null }
+    }
+
+    // Marcar como leídos los avisos de este chat (al entrar y al llegar mensajes)
+    LaunchedEffect(groupId, readTick) {
+        try {
+            val r = ApiClient.service.markNotificationsRead(MarkReadRequest(collapseKey = "msg:$groupId"))
+            r.body()?.let { RealtimeClient.setUnread(it.unread) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
+
+    // Tiempo real: mensajes y «escribiendo» de este grupo
+    LaunchedEffect(groupId) {
+        val gson = Gson()
+        RealtimeClient.events.collect { ev ->
+            val gid = try { ev.get("group_id")?.asInt } catch (_: Exception) { null }
+            if (gid != groupId) return@collect
+            when (ev.get("type")?.asString) {
+                "message" -> {
+                    val m = try {
+                        gson.fromJson(ev.getAsJsonObject("message"), GroupMessageResponse::class.java)
+                    } catch (_: Exception) { null }
+                    if (m != null && messages.none { it.id == m.id }) {
+                        messages = messages + m
+                        if (m.username == typingUser) typingUser = null
+                        if (m.userId != myUserId) readTick++
+                    }
+                }
+                "typing" -> {
+                    val uid = try { ev.get("user_id")?.asInt } catch (_: Exception) { null }
+                    if (uid != null && uid != myUserId) {
+                        typingUser = ev.get("username")?.asString
+                        typingStamp = System.currentTimeMillis()
+                    }
+                }
+            }
+        }
+    }
+
+    // «Está escribiendo…» se apaga solo a los 4 s sin señales nuevas
+    LaunchedEffect(typingStamp) {
+        if (typingUser != null) {
+            delay(4000)
+            typingUser = null
+        }
+    }
 
     // Saber quién soy, para pintar mis mensajes a la derecha
     LaunchedEffect(groupId) {
@@ -60,9 +121,16 @@ fun GroupChatScreen(
             val resp = ApiClient.service.sendGroupMessage(groupId, GroupMessageRequest(text))
             if (!resp.isSuccessful) {
                 error = "No se pudo enviar (${resp.code()})"
+                input = text   // no perder lo escrito
+            } else {
+                // Sin esperar al refresco: aparece al momento (el WebSocket lo deduplica por id)
+                resp.body()?.let { m -> if (messages.none { it.id == m.id }) messages = messages + m }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (_: Exception) {
             error = context.getString(R.string.err_send_offline)
+            input = text
         }
         pendingText = null
     }
@@ -74,7 +142,7 @@ fun GroupChatScreen(
                 val resp = ApiClient.service.getGroupMessages(groupId)
                 if (resp.isSuccessful) {
                     val newMsgs = resp.body() ?: emptyList()
-                    if (newMsgs.size != messages.size) {
+                    if (newMsgs.size != messages.size || newMsgs.lastOrNull()?.id != messages.lastOrNull()?.id) {
                         messages = newMsgs
                     }
                     error = null
@@ -83,11 +151,13 @@ fun GroupChatScreen(
                 } else if (messages.isEmpty()) {
                     error = "Error al cargar (${resp.code()})"
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) {
                 if (messages.isEmpty()) error = context.getString(R.string.msg_reconnecting)
             }
             loading = false
-            delay(5000)
+            delay(if (RealtimeClient.connected.value) 20_000L else 5_000L)
         }
     }
 
@@ -104,8 +174,14 @@ fun GroupChatScreen(
                 title = {
                     Column {
                         Text("💬 $groupTitle", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text("${messages.size} mensaje${if (messages.size == 1) "" else "s"}", fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val typing = typingUser
+                        if (typing != null) {
+                            Text("@$typing está escribiendo…", fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Text("${messages.size} mensaje${if (messages.size == 1) "" else "s"}", fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 },
                 navigationIcon = {
@@ -129,7 +205,15 @@ fun GroupChatScreen(
                 ) {
                     OutlinedTextField(
                         value = input,
-                        onValueChange = { if (it.length <= 500) input = it },
+                        onValueChange = {
+                            if (it.length <= 500) input = it
+                            // Avisar «escribiendo» como mucho cada 3 s
+                            val now = System.currentTimeMillis()
+                            if (it.isNotBlank() && now - lastTypingSent > 3000) {
+                                lastTypingSent = now
+                                RealtimeClient.sendTyping(groupId)
+                            }
+                        },
                         placeholder = { Text(stringResource(R.string.chat_hint)) },
                         modifier = Modifier.weight(1f),
                         maxLines = 4,

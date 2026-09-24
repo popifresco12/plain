@@ -224,12 +224,32 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // 0.9.0: 1 = este móvil, 2 = todos los dispositivos. La red va en el efecto.
+            var logoutMode by remember { mutableIntStateOf(0) }
+            LaunchedEffect(logoutMode) {
+                if (logoutMode == 0) return@LaunchedEffect
+                try {
+                    // Sin red no se bloquea el cierre: como mucho 4 s
+                    kotlinx.coroutines.withTimeoutOrNull(4000) {
+                        if (logoutMode == 2) ApiClient.service.logoutAll()
+                        else ApiClient.service.logout(
+                            com.plain.app.data.LogoutRequest(AuthManager.getRefreshToken())
+                        )
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                }
+                AuthManager.clearUserToken()
+                AuthManager.clearToken()
+                ApiClient.setToken(null)
+                logoutMode = 0
+                onLogout()
+            }
+
             OutlinedButton(
-                onClick = {
-                    AuthManager.clearToken()
-                    ApiClient.setToken(null)
-                    onLogout()
-                },
+                onClick = { if (logoutMode == 0) logoutMode = 1 },
+                enabled = logoutMode == 0,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
@@ -237,6 +257,18 @@ fun SettingsScreen(
                 )
             ) {
                 Text(stringResource(R.string.set_logout))
+            }
+
+            TextButton(
+                onClick = { if (logoutMode == 0) logoutMode = 2 },
+                enabled = logoutMode == 0,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Cerrar sesión en todos los dispositivos",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))

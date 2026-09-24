@@ -113,7 +113,7 @@ fun LoginScreen(
                             val resp = ApiClient.service.login(LoginRequest(username, password))
                             if (resp.isSuccessful) {
                                 val token = resp.body()!!
-                                AuthManager.saveUserToken(token.accessToken)
+                                AuthManager.saveSession(token.accessToken, token.refreshToken)
                                 onLoginSuccess()
                             } else {
                                 error = context.getString(R.string.err_bad_credentials)

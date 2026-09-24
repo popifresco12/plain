@@ -23,7 +23,11 @@ interface ApiService {
         @Query("radius_km") radiusKm: Int? = null,
         @Query("plan_type") planType: String? = null,
         @Query("category") category: String? = null,
-        @Query("only_available") onlyAvailable: Boolean? = null
+        @Query("only_available") onlyAvailable: Boolean? = null,
+        /** «Para ti»: ordena por afinidad con lo que te ha gustado */
+        @Query("for_you") forYou: Boolean? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null
     ): Response<List<PlanResponse>>
 
     @POST("api/plans")
@@ -142,4 +146,25 @@ interface ApiService {
     // ===== Ciudades dinámicas =====
     @POST("api/cities/{city}/bootstrap")
     suspend fun bootstrapCity(@Path("city") city: String): Response<BootstrapResult>
+
+    // ===== 0.9.0: avisos =====
+    @GET("api/notifications")
+    suspend fun getNotifications(
+        @Query("since_id") sinceId: Int? = null,
+        @Query("limit") limit: Int? = null
+    ): Response<NotificationsResponse>
+
+    @POST("api/notifications/read")
+    suspend fun markNotificationsRead(@Body body: MarkReadRequest): Response<MarkReadResponse>
+
+    // ===== 0.9.0: match =====
+    @GET("api/matches")
+    suspend fun getMatches(): Response<MatchesResponse>
+
+    // ===== 0.9.0: sesión =====
+    @POST("api/logout")
+    suspend fun logout(@Body body: LogoutRequest): Response<Map<String, String>>
+
+    @POST("api/logout-all")
+    suspend fun logoutAll(): Response<Map<String, String>>
 }

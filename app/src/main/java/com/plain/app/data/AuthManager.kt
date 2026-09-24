@@ -7,6 +7,7 @@ object AuthManager {
     private const val PREFS_NAME = "plain_auth"
     private const val KEY_USER_TOKEN = "user_token"
     private const val KEY_BUSINESS_TOKEN = "business_token"
+    private const val KEY_REFRESH_TOKEN = "refresh_token"
 
     private var prefs: SharedPreferences? = null
 
@@ -26,6 +27,18 @@ object AuthManager {
         prefs?.edit()?.putString(KEY_USER_TOKEN, token)?.apply()
         ApiClient.setUserToken(token)
     }
+
+    /** 0.9.0: guarda access + refresh a la vez. `commit()` (síncrono): lo llama el
+     *  Authenticator de OkHttp desde su hilo y la siguiente petición ya debe verlo. */
+    fun saveSession(access: String, refresh: String?) {
+        prefs?.edit()?.apply {
+            putString(KEY_USER_TOKEN, access)
+            if (refresh != null) putString(KEY_REFRESH_TOKEN, refresh)
+        }?.commit()
+        ApiClient.setUserToken(access)
+    }
+
+    fun getRefreshToken(): String? = prefs?.getString(KEY_REFRESH_TOKEN, null)
 
     fun saveBusinessToken(token: String) {
         prefs?.edit()?.putString(KEY_BUSINESS_TOKEN, token)?.apply()
@@ -49,7 +62,7 @@ object AuthManager {
     }
 
     fun clearUserToken() {
-        prefs?.edit()?.remove(KEY_USER_TOKEN)?.apply()
+        prefs?.edit()?.remove(KEY_USER_TOKEN)?.remove(KEY_REFRESH_TOKEN)?.apply()
         ApiClient.setUserToken(null)
     }
 

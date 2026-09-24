@@ -131,7 +131,7 @@ fun RegisterScreen(
                             )
                             if (resp.isSuccessful) {
                                 val token = resp.body()!!
-                                AuthManager.saveUserToken(token.accessToken)
+                                AuthManager.saveSession(token.accessToken, token.refreshToken)
                                 onRegisterSuccess()
                             } else {
                                 error = "Error: ${resp.code()} - ${resp.message()}"

@@ -161,6 +161,24 @@ fun PlanCardFromResponse(
                         .align(Alignment.BottomStart)
                         .padding(start = 18.dp, end = 18.dp, bottom = 16.dp)
                 ) {
+                    // «Para ti»: por qué te lo enseñamos (solo si hay historial que lo justifique)
+                    plan.reason?.let { razon ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = "✨ Para ti · $razon",
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
                     Text(
                         text = plan.title,
                         style = MaterialTheme.typography.headlineSmall,

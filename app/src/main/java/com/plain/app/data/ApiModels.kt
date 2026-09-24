@@ -17,6 +17,9 @@ data class UserResponse(
 data class TokenResponse(
     @SerializedName("access_token") val accessToken: String,
     @SerializedName("token_type") val tokenType: String,
+    // 0.9.0: sesión renovable. Null si el backend es anterior (entonces el access dura 30 días)
+    @SerializedName("refresh_token") val refreshToken: String? = null,
+    @SerializedName("expires_in") val expiresIn: Int? = null,
     val user: UserResponse
 )
 
@@ -49,7 +52,9 @@ data class PlanResponse(
     val recurring: String? = null,
     @SerializedName("is_available_now") val isAvailableNow: Boolean = true,
     /** km hasta la ciudad elegida (solo si se pidió con radio) */
-    @SerializedName("distance_km") val distanceKm: Double? = null
+    @SerializedName("distance_km") val distanceKm: Double? = null,
+    /** «Para ti»: por qué se recomienda (null = sin historial suficiente) */
+    val reason: String? = null
 )
 
 data class PlanCreateRequest(
@@ -192,7 +197,9 @@ data class FavoriteResponse(
 )
 
 data class FavoriteActionResponse(
-    val status: String
+    val status: String,
+    /** 0.9.0: cuántas personas más han marcado este plan (match) */
+    val matches: Int = 0
 )
 
 // === Disliked Tags ===
@@ -263,7 +270,9 @@ data class TripGroupResponse(
     val notes: String? = null,
     @SerializedName("created_at") val createdAt: String,
     val members: List<TripGroupMember> = emptyList(),
-    @SerializedName("seats_taken") val seatsTaken: Int = 0
+    @SerializedName("seats_taken") val seatsTaken: Int = 0,
+    @SerializedName("join_mode") val joinMode: String = "open",
+    @SerializedName("my_status") val myStatus: String? = null
 )
 // --- Chat de quedadas ---
 
@@ -348,3 +357,76 @@ data class EventItem(
 )
 
 data class EventsRequest(val events: List<EventItem>)
+
+
+// ===== 0.9.0: avisos, match y sesión =====
+
+data class NotificationItem(
+    val id: Int,
+    val kind: String,
+    val title: String,
+    val body: String = "",
+    val data: Map<String, Any?> = emptyMap(),
+    @SerializedName("collapse_key") val collapseKey: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+    val read: Boolean = false
+) {
+    /** Gson convierte los números de un Map a Double: se normalizan aquí. */
+    fun intData(key: String): Int? = when (val v = data[key]) {
+        is Number -> v.toInt()
+        is String -> v.toIntOrNull()
+        else -> null
+    }
+    fun strData(key: String): String? = data[key]?.toString()
+}
+
+data class NotificationsResponse(
+    val items: List<NotificationItem> = emptyList(),
+    val unread: Int = 0
+)
+
+data class MarkReadRequest(
+    val ids: List<Int> = emptyList(),
+    val all: Boolean = false,
+    @SerializedName("collapse_key") val collapseKey: String? = null
+)
+
+data class MarkReadResponse(val updated: Int = 0, val unread: Int = 0)
+
+data class MatchPerson(
+    @SerializedName("user_id") val userId: Int,
+    val username: String
+)
+
+data class MatchGroup(
+    val id: Int,
+    val title: String,
+    val seats: Int = 4,
+    @SerializedName("seats_taken") val seatsTaken: Int = 0,
+    @SerializedName("join_mode") val joinMode: String = "open",
+    @SerializedName("i_am_member") val iAmMember: Boolean = false
+)
+
+data class MatchItem(
+    @SerializedName("plan_id") val planId: Int,
+    val title: String,
+    val city: String = "",
+    val emoji: String = "📍",
+    @SerializedName("image_url") val imageUrl: String? = null,
+    val category: String = "",
+    val people: List<MatchPerson> = emptyList(),
+    @SerializedName("people_count") val peopleCount: Int = 0,
+    val groups: List<MatchGroup> = emptyList()
+)
+
+data class MatchesResponse(val items: List<MatchItem> = emptyList())
+
+data class RefreshRequest(@SerializedName("refresh_token") val refreshToken: String)
+
+data class RefreshResponse(
+    @SerializedName("access_token") val accessToken: String,
+    @SerializedName("refresh_token") val refreshToken: String,
+    @SerializedName("expires_in") val expiresIn: Int? = null
+)
+
+data class LogoutRequest(@SerializedName("refresh_token") val refreshToken: String?)

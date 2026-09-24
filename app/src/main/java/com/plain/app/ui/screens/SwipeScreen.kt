@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -50,6 +52,8 @@ import android.content.Context
 import com.plain.app.data.PlanResponse
 import com.plain.app.data.TripGroupCreateRequest
 import com.plain.app.data.TripGroupResponse
+import com.plain.app.data.PlanCache
+import com.plain.app.data.RealtimeClient
 import com.plain.app.ui.components.PlanCardFromResponse
 import com.plain.app.ui.components.addToCalendar
 import com.plain.app.ui.components.sharePlan
@@ -68,6 +72,8 @@ fun SwipeScreen(
     onFavorites: () -> Unit,
     onCreatePlan: () -> Unit,
     onOpenChat: (Int, String) -> Unit = { _, _ -> },
+    onNotifications: () -> Unit = {},
+    onMatches: () -> Unit = {},
     onSwitchCity: (String) -> Unit = {},
     planCreated: Boolean = false
 ) {
@@ -82,6 +88,12 @@ fun SwipeScreen(
     var webhookAvailable by remember { mutableStateOf(false) }
     var feedbackText by remember { mutableStateOf<String?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    // Paginación (0.9.0): se piden PAGE planes y el siguiente bloque al quedar pocos
+    var nextOffset by remember { mutableIntStateOf(0) }
+    var hasMore by remember { mutableStateOf(false) }
+    var loadingMore by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    val unreadNotifs by RealtimeClient.unread.collectAsState()
     val scope = rememberCoroutineScope()
 
     // Estado de grupos: vive al nivel del SwipeScreen (no del diálogo) para
@@ -169,8 +181,34 @@ fun SwipeScreen(
     // cancelaría el efecto a media petición y el catch mostraría
     // "The coroutine scope left the composition" como si fuera un error real.
     LaunchedEffect(city, refreshKey, radiusKm, filterType, filterCategory, filterFree) {
+        val cacheKey = PlanCache.key(city, radiusKm)
+        val sinFiltros = filterType == null && filterCategory == null && !filterFree
+        val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf()) ?: mutableSetOf()
+
+        /** Prepara una página para el mazo: quita lo ya visto y respeta «Para ti». */
+        fun prepare(page: List<PlanResponse>): List<PlanResponse> {
+            var loaded = page.filter { it.id.toString() !in seen }
+            if (filterFree) loaded = loaded.filter { it.price.trim().startsWith("0") }
+            // Si el servidor ha ordenado por afinidad, se respeta; si no, se baraja como antes
+            return if (loaded.any { it.reason != null }) loaded else loaded.shuffled()
+        }
+
+        // Caché: con el mazo vacío se enseña al instante lo último guardado
+        if (plans.isEmpty() && sinFiltros) {
+            PlanCache.load(context, cacheKey)?.let { cached ->
+                val fromCache = prepare(cached)
+                if (fromCache.isNotEmpty()) {
+                    allPlans = fromCache
+                    plans = filterPlans(fromCache, query)
+                    loading = false
+                }
+            }
+        }
         try {
-            var resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory, onlyAvailable = true)
+            var resp = ApiClient.service.getPlans(
+                city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory,
+                onlyAvailable = true, forYou = true, limit = PAGE, offset = 0
+            )
 
             // Si la ciudad no tiene planes (ciudad nueva), generar planes locales
             // automáticamente (backend idempotente: no duplica si ya existen)
@@ -182,7 +220,10 @@ fun SwipeScreen(
                     if (created > 0) {
                         feedbackText = "✨ ¡Hemos creado $created planes en ${city.lowercase().replaceFirstChar { it.uppercase() }}!"
                     }
-                    resp = ApiClient.service.getPlans(city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory, onlyAvailable = true)
+                    resp = ApiClient.service.getPlans(
+                        city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory,
+                        onlyAvailable = true, forYou = true, limit = PAGE, offset = 0
+                    )
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -191,25 +232,84 @@ fun SwipeScreen(
             }
 
             if (resp.isSuccessful) {
-                // Filtrar los que ya se swiparon en esta ciudad (persistente)
-                val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf()) ?: mutableSetOf()
-                var loaded = resp.body()?.filter { it.id.toString() !in seen } ?: emptyList()
-                if (filterFree) loaded = loaded.filter { it.price.trim().startsWith("0") }
-                val fresh = loaded.shuffled()
+                val page = resp.body() ?: emptyList()
+                if (sinFiltros) PlanCache.save(context, cacheKey, page)
+                nextOffset = page.size
+                hasMore = page.size >= PAGE
+                val fresh = prepare(page)
                 allPlans = fresh
                 plans = filterPlans(fresh, query)
-                error = if (fresh.isEmpty()) {
+                error = if (fresh.isEmpty() && !hasMore) {
                     "Ya has visto todos los planes de esta ciudad. ¡Vuelve mañana para más!"
                 } else null
+            } else if (plans.isNotEmpty()) {
+                feedbackText = "📴 Servidor no disponible: mostrando planes guardados"
+                error = null
             } else {
                 error = "Error al cargar planes (${resp.code()})"
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e   // cancelación normal (recomposición/navegación): NO es un error
         } catch (e: Exception) {
-            error = "Error de conexión: ${e.localizedMessage}"
+            if (plans.isNotEmpty()) {
+                val mins = PlanCache.ageMinutes(context, cacheKey) ?: 0
+                val hace = when {
+                    mins < 60 -> "hace $mins min"
+                    mins < 60 * 24 -> "hace ${mins / 60} h"
+                    else -> "hace ${mins / (60 * 24)} d"
+                }
+                feedbackText = "📴 Sin conexión: planes guardados $hace"
+                error = null
+            } else {
+                error = "Error de conexión: ${e.localizedMessage}"
+            }
         } finally {
             loading = false
+        }
+    }
+
+    // Siguiente página cuando quedan pocas tarjetas. No es clave de este efecto nada
+    // de lo que escribe antes de su último punto de suspensión (ver nota de arriba).
+    LaunchedEffect(plans.size, hasMore, loading) {
+        if (!hasMore || loading || loadingMore || plans.size > 3) return@LaunchedEffect
+        loadingMore = true
+        try {
+            val resp = ApiClient.service.getPlans(
+                city = city, radiusKm = radiusKm, planType = filterType, category = filterCategory,
+                onlyAvailable = true, forYou = true, limit = PAGE, offset = nextOffset
+            )
+            if (resp.isSuccessful) {
+                val page = resp.body() ?: emptyList()
+                val seen = prefs.getStringSet("seen_plan_ids", mutableSetOf()) ?: mutableSetOf()
+                val known = allPlans.map { it.id }.toSet()
+                var extra = page.filter { it.id.toString() !in seen && it.id !in known }
+                if (filterFree) extra = extra.filter { it.price.trim().startsWith("0") }
+                nextOffset += page.size
+                hasMore = page.size >= PAGE
+                allPlans = allPlans + extra
+                plans = plans + filterPlans(extra, query)
+                if (plans.isEmpty() && !hasMore) {
+                    error = "Ya has visto todos los planes de esta ciudad. ¡Vuelve mañana para más!"
+                }
+            } else {
+                hasMore = false
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            hasMore = false   // sin red: se queda con lo que hay (y la caché)
+        } finally {
+            loadingMore = false
+        }
+    }
+
+    // Contador de la campana al entrar (luego lo mantiene el WebSocket)
+    LaunchedEffect(Unit) {
+        try {
+            ApiClient.service.getNotifications(limit = 1).body()?.let { RealtimeClient.setUnread(it.unread) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
     }
 
@@ -274,7 +374,9 @@ fun SwipeScreen(
                                 "SEVILLA" -> "💃 Sevilla"
                                 else -> "🏰 ${city.lowercase().replaceFirstChar { it.uppercase() }}"
                             },
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                         if (plans.isNotEmpty()) {
                             Text(
@@ -316,8 +418,28 @@ fun SwipeScreen(
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_settings))
+                    IconButton(onClick = onNotifications) {
+                        BadgedBox(badge = {
+                            if (unreadNotifs > 0) Badge { Text(if (unreadNotifs > 9) "9+" else unreadNotifs.toString()) }
+                        }) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Avisos")
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Más opciones")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("✨ Tus match") },
+                                onClick = { showMenu = false; onMatches() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.cd_settings)) },
+                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                onClick = { showMenu = false; onSettings() }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -628,7 +750,14 @@ fun SwipeScreen(
                                     // SWIPE RIGHT — Save to favorites
                                     scope.launch {
                                         try {
-                                            ApiClient.service.addFavorite(currentPlan.id)
+                                            val fav = ApiClient.service.addFavorite(currentPlan.id)
+                                            val m = fav.body()?.matches ?: 0
+                                            if (m > 0) {
+                                                feedbackText = if (m == 1) "✨ ¡Match! A otra persona también le apetece este plan"
+                                                else "✨ ¡Match! A $m personas más les apetece este plan"
+                                            }
+                                        } catch (e: kotlinx.coroutines.CancellationException) {
+                                            throw e
                                         } catch (_: Exception) {}
                                     }
                                     // Trigger webhook if configured
@@ -1155,3 +1284,6 @@ private fun parseIsoMillis(raw: String): Long? {
         }
     }
 }
+
+/** Planes por página del mazo (el backend admite hasta 200). */
+private const val PAGE = 30
