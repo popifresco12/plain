@@ -84,10 +84,13 @@ fun CitySelectionScreen(
         }
     }
 
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp)
     ) {
         Spacer(Modifier.height(24.dp))
@@ -278,6 +281,7 @@ fun CitySelectionScreen(
             modifier = Modifier.padding(bottom = 16.dp)
         )
         }
+    }
     }
 }
 
