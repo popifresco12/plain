@@ -16,7 +16,17 @@ else:
         sep = "&" if "?" in DATABASE_URL else "?"
         DATABASE_URL = f"{DATABASE_URL}{sep}sslmode=require"
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    # Neon (Postgres serverless) cierra las conexiones SSL inactivas. Sin
+    # pool_pre_ping, el pool reutiliza una conexión muerta y la primera consulta
+    # tras un rato en reposo da "SSL connection has been closed unexpectedly"
+    # (500 en registro/login). pre_ping la detecta y reconecta; recycle la
+    # renueva antes de que Neon la tumbe por inactividad.
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
